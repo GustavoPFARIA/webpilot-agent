@@ -17,6 +17,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [S
 - The API-token bar was always visible (`display` overrode `hidden`).
 - Clearer messages when a link, redirect or form is blocked.
 
+### Security
+- Resolved all CodeQL findings in the test store: pages now render through Jinja2 with autoescaping (XSS), forged session cookies are rejected (cookie injection), and the deliberate open redirect only targets relative paths or the reserved `.example` TLD, so a deployed copy can't redirect real users.
+
 ## [1.1.0] - 2026-09-29
 
 ### Security

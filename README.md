@@ -130,7 +130,7 @@ make check   # everything CI runs: lint, types, dependency audit, tests with cov
 
 | Practice | Tooling |
 |---|---|
-| **79 tests, 89% coverage** (CI fails below 85%) | pytest, pytest-asyncio, pytest-cov: guardrails, SSRF, auth, limits, provider adapters, agent loop, telemetry, real-browser end-to-end, full stack over HTTP, MCP |
+| **87 tests, 89% coverage** (CI fails below 85%) | pytest, pytest-asyncio, pytest-cov: guardrails, SSRF, auth, limits, provider adapters, agent loop, telemetry, real-browser end-to-end, full stack over HTTP, MCP |
 | **16 end-to-end evals** (CI fails below 100%) | Real Chromium against the test store, graded on server-side evidence |
 | Lint and format, including security rules | Ruff (`S` = Bandit rules, `ASYNC`, `B`, `RUF`, `PT`, …) |
 | Static typing | mypy |

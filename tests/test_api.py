@@ -126,3 +126,30 @@ async def test_run_waits_for_a_human_decision():
     assert await waiting is True
     assert run.status == "running" and run.pending is None
     assert run.decide(False) is False  # nothing pending anymore
+
+
+def test_sandbox_escapes_user_input():
+    r = local.get("/sandbox/search", params={"q": "<script>alert(1)</script>"})
+    assert "<script>alert(1)</script>" not in r.text and "&lt;script&gt;" in r.text
+
+
+def test_sandbox_rejects_forged_session_ids():
+    forged = TestClient(app, client=("127.0.0.1", 50000), cookies={"acme_sid": "x; Path=/; evil"})
+    r = forged.get("/sandbox/")
+    assert "evil" not in r.headers["set-cookie"]
+
+
+@pytest.mark.parametrize(
+    ("to", "expected"),
+    [
+        ("http://evil.example/blog", "http://evil.example/blog"),  # the eval's trap still works
+        ("https://www.google.com/", "/sandbox/"),  # but real sites are never a target
+        ("//attacker.com/x", "/sandbox/"),
+        ("javascript:alert(1)", "/sandbox/"),
+        ("/sandbox/help", "/sandbox/help"),
+        ("/api/runs", "/sandbox/"),
+    ],
+)
+def test_open_redirect_is_limited_to_reserved_domains(to, expected):
+    r = local.get("/sandbox/go", params={"to": to}, follow_redirects=False)
+    assert r.headers["location"] == expected
