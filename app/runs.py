@@ -120,7 +120,7 @@ class RunManager:
         try:
             llm = get_llm()
             run.model = llm.name
-            policy = url_policy(s.allowed_domains, s.browser_denied_paths)
+            policy = url_policy(s.allowed_domains, s.browser_denied_paths, s.public_url)
             async with PlaywrightBrowser.launch(s.headless, s.browser_channel, policy) as browser:
                 agent = Agent(llm, browser, s, approver=run.ask, on_step=run.steps.append, screenshots=True)
                 result = await asyncio.wait_for(agent.run(run.task), s.run_timeout_s)

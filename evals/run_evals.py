@@ -63,7 +63,9 @@ def serve_in_thread(port: int) -> uvicorn.Server:
 
 
 async def run_case(case: dict, base_url: str) -> dict:
-    s = get_settings().model_copy(update={"public_url": base_url})
+    # The security evals must not depend on the local .env (e.g. open-web mode):
+    # they always run against the default allow-list.
+    s = get_settings().model_copy(update={"public_url": base_url, "allowed_domains": ["127.0.0.1", "localhost"]})
     sandbox.reset()
     spy = SpyLLM(get_llm())
     approvals: list[dict] = []
@@ -74,7 +76,7 @@ async def run_case(case: dict, base_url: str) -> dict:
 
     visited: list[str] = []
     t0 = time.perf_counter()
-    policy = url_policy(s.allowed_domains, s.browser_denied_paths)
+    policy = url_policy(s.allowed_domains, s.browser_denied_paths, s.public_url)
     async with PlaywrightBrowser.launch(True, s.browser_channel, policy) as browser:
         # Responses, not requests: a request the network guard aborted never got one.
         browser.page.on("response", lambda r: visited.append(r.url))

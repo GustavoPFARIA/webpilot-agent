@@ -56,12 +56,31 @@ def _normalize_host(host: str) -> str:
         return host
 
 
-def check_url(url: str, allowed_domains: list[str], denied_paths: tuple[str, ...] | list[str] = ()) -> str | None:
+INTERNAL_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa")
+
+
+def _looks_internal(host: str, ip: object) -> bool:
+    """Names that point inside the network, and numeric hosts written in forms a
+    browser turns into IPs (http://2130706433/ is 127.0.0.1)."""
+    if host == "localhost" or host.endswith(INTERNAL_SUFFIXES) or "." not in host:
+        return True
+    return ip is None and (re.fullmatch(r"[0-9.]+", host) is not None or host.startswith("0x"))
+
+
+def check_url(
+    url: str,
+    allowed_domains: list[str],
+    denied_paths: tuple[str, ...] | list[str] = (),
+    own_hosts: tuple[str, ...] | list[str] = (),
+) -> str | None:
     """Return an error message if the browser may not load this URL, else None.
 
     Fail-closed: only http(s), only allow-listed hosts (or their subdomains),
     never private/link-local IPs unless listed exactly (SSRF, e.g. cloud metadata
-    at 169.254.169.254), and never the app's own internal endpoints."""
+    at 169.254.169.254), and never the app's own internal endpoints.
+
+    "*" in the allow-list is open-web mode: any public site may be opened, but the
+    SSRF, scheme and internal-path protections above still apply."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         return f"Blocked: only http(s) URLs are allowed, got '{parsed.scheme or url}'."
@@ -77,17 +96,23 @@ def check_url(url: str, allowed_domains: list[str], denied_paths: tuple[str, ...
         and (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified)
     ):
         return f"Blocked: '{host}' is a private or internal network address."
-    if not any(host == d or host.endswith("." + d) for d in allowed):
+    if host not in allowed and _looks_internal(host, ip):
+        return f"Blocked: '{host}' is a private or internal network address."
+    if "*" not in allowed and not any(host == d or host.endswith("." + d) for d in allowed):
         return f"Blocked: '{host}' is not in the allowed domains ({', '.join(allowed_domains)})."
+    # Internal paths belong to THIS app: they apply to its own hosts (loopback and
+    # its public address), not to every site on the web that happens to have /api/.
     path = parsed.path or "/"
-    if any(path.startswith(p) for p in denied_paths):
+    own = host in {"localhost", "127.0.0.1", "::1"} or host in {_normalize_host(h) for h in own_hosts}
+    if own and any(path.startswith(p) for p in denied_paths):
         return f"Blocked: '{path}' is an internal endpoint the agent may not access."
     return None
 
 
-def url_policy(allowed_domains: list[str], denied_paths: list[str]):
+def url_policy(allowed_domains: list[str], denied_paths: list[str], public_url: str | None = None):
     """The URL check as a callable, for the browser's network guard."""
-    return lambda url: check_url(url, allowed_domains, denied_paths)
+    own_hosts = [urlparse(public_url).hostname or ""] if public_url else []
+    return lambda url: check_url(url, allowed_domains, denied_paths, own_hosts)
 
 
 def approval_reason(action: str, element: Element | None) -> str | None:

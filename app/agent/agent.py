@@ -85,7 +85,7 @@ class Agent:
         }  # fmt: skip
 
     def url_policy(self, url: str) -> str | None:
-        return guardrails.url_policy(self.s.allowed_domains, self.s.browser_denied_paths)(url)
+        return guardrails.url_policy(self.s.allowed_domains, self.s.browser_denied_paths, self.s.public_url)(url)
 
     async def observe(self) -> tuple[str, list[str], str]:
         state = await self.browser.state()

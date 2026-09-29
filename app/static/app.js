@@ -36,7 +36,9 @@ EXAMPLES.forEach((t, i) => {
 fetch("/health").then(r => r.json()).then(h => {
   $("#mode").textContent = h.llm_provider === "scripted"
     ? "No model API key configured, so the offline test policy is running: it only understands the example tasks. Add a free Gemini key (see README) to give the agent any task."
-    : `Model: ${h.llm_provider}. Allowed sites: ${h.allowed_domains.join(", ")}.`;
+    : `Model: ${h.llm_provider}. Sites: ${h.allowed_domains.includes("*")
+        ? "any public website (internal networks stay blocked)"
+        : h.allowed_domains.join(", ")}.`;
 });
 
 let timer = null, current = null, lastPending = "", lastSteps = -1;

@@ -108,3 +108,42 @@ def test_host_normalization():
     assert g.check_url("https://EXAMPLE.com./a", ALLOWED) is None  # case and trailing dot
     assert g.check_url("https://exämple.com/", ALLOWED)  # IDN lookalike compares as punycode
     assert g.check_url("https://bücher.de/", ["bücher.de"]) is None
+
+
+OPEN_WEB = ["*", "127.0.0.1", "localhost"]
+
+
+@pytest.mark.parametrize(
+    "url", ["https://www.python.org/", "https://en.wikipedia.org/wiki/Brazil", "http://93.184.215.14/"]
+)
+def test_open_web_mode_allows_any_public_site(url):
+    assert g.check_url(url, OPEN_WEB) is None
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://169.254.169.254/latest/meta-data/",  # cloud credentials
+        "http://10.0.0.5/",
+        "http://192.168.0.1/",
+        "http://2130706433/",  # 127.0.0.1 in disguise
+        "http://0x7f000001/",
+        "http://router.local/",
+        "http://metadata.google.internal/",
+        "http://intranet/",  # single-label names resolve inside the network
+        "file:///etc/passwd",
+    ],
+)
+def test_open_web_mode_still_blocks_internal_targets(url):
+    assert g.check_url(url, ["*"])
+
+
+def test_open_web_mode_keeps_internal_paths_blocked():
+    assert "internal endpoint" in g.check_url("http://127.0.0.1:8000/api/runs", OPEN_WEB, ["/api/"])
+
+
+def test_internal_paths_only_apply_to_this_apps_own_hosts():
+    denied = ["/api/"]
+    assert g.check_url("https://status.example.com/api/v2/status.json", OPEN_WEB, denied) is None
+    assert g.check_url("http://localhost:8000/api/runs", OPEN_WEB, denied)
+    assert g.check_url("https://webpilot.example.com/api/runs", ["*"], denied, ["webpilot.example.com"])

@@ -107,6 +107,16 @@ cp .env.example .env    # then paste your key, e.g. GEMINI_API_KEY=AIza...
 
 The free Gemini tier is rate-limited, so calls are spaced automatically (`LLM_MIN_INTERVAL_S`) and 429s are retried with backoff. Free-tier prompts may be used by Google to improve its products, so use it with test sites and test data, not private information. To browse real websites, add them to `ALLOWED_DOMAINS`.
 
+### Browse any website
+
+By default the agent may only open the sites in `ALLOWED_DOMAINS`. That is the strongest protection against data exfiltration. To let it browse the open web, like general-purpose browser agents:
+
+```bash
+ALLOWED_DOMAINS=["*","127.0.0.1","localhost"]
+```
+
+Open-web mode still blocks private and internal networks, cloud metadata (`169.254.169.254`), disguised IPs (`http://2130706433/`), non-http schemes and this app's own API. Secrets still never reach the model, and purchases still need your approval. What you give up is the guarantee that a manipulated model can't *send* page data to an arbitrary site, so keep the allow-list for anything sensitive. Sites with CAPTCHAs or bot protection (Google, Amazon) block automated browsers either way.
+
 With no key at all, a deterministic offline policy runs instead. It exists so the tests and CI never depend on an external API. It understands only the example tasks, and the UI says so.
 
 ## Evaluation

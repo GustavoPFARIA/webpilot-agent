@@ -2,6 +2,15 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [Semantic Versioning](https://semver.org).
 
+## [1.4.0] - 2026-09-29
+
+### Added
+- Open-web mode (`ALLOWED_DOMAINS=["*", ...]`): browse any public website while internal networks, cloud metadata, disguised IPs and this app's API stay blocked. Verified with Gemini on python.org.
+
+### Fixed
+- Internal-path blocking (`/api/`, `/docs`...) now applies only to this app's own hosts, not to every website.
+- Security evals no longer depend on the local `.env`; they always use the default allow-list.
+
 ## [1.3.1] - 2026-09-29
 
 ### Fixed

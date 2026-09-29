@@ -17,7 +17,7 @@ Settings are read from environment variables or a `.env` file (see [`.env.exampl
 | `HEADLESS` | `true` | Set `false` to watch the browser |
 | `MAX_STEPS` | `15` | Step budget per run |
 | `APPROVAL_TIMEOUT_S` | `300` | A pending approval is treated as a reject after this |
-| `ALLOWED_DOMAINS` | `["127.0.0.1","localhost"]` | Hosts (and subdomains) the agent may open |
+| `ALLOWED_DOMAINS` | `["127.0.0.1","localhost"]` | Hosts (and subdomains) the agent may open. `"*"` = open-web mode: any public site, with internal networks, cloud metadata and this app's API still blocked |
 | `SECRETS` | demo store account | `{"name": "value"}` used through `{{secret:name}}` placeholders |
 | `BROWSER_DENIED_PATHS` | `["/api/","/docs","/redoc","/openapi.json","/health","/sandbox/_state"]` | Paths the browser may never load on any host (the app's internals) |
 | `PUBLIC_URL` | *(from the request)* | Where the browser can reach this server; the agent's default start page is `{PUBLIC_URL}/sandbox/`. Leave it empty locally; set it when the browser must use a different address than the user (e.g. inside Docker) |

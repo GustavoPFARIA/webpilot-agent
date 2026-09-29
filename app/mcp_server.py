@@ -31,7 +31,7 @@ def build_server() -> MCPServer:
     async def run_browser_task(task: str) -> dict[str, Any]:
         """Complete a task in a web browser (search, read, compare, fill forms) and return the result."""
         s = get_settings()
-        policy = url_policy(s.allowed_domains, s.browser_denied_paths)
+        policy = url_policy(s.allowed_domains, s.browser_denied_paths, s.public_url)
         async with PlaywrightBrowser.launch(True, s.browser_channel, policy) as browser:
             result = await Agent(get_llm(), browser, s, approver=deny_all).run(task)
         return {
