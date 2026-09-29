@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebPilot Agent</title>
+<style>
+:root{--bg:#f6f7fb;--panel:#fff;--ink:#1b2130;--muted:#667085;--line:#e3e6ee;--accent:#3056d3;--accent-soft:#e8eefc;
+--good:#137a4b;--good-soft:#e5f5ec;--warn:#9a5b00;--warn-soft:#fff3dc;--bad:#b42318;--bad-soft:#fdecea}
+@media (prefers-color-scheme: dark){:root{--bg:#10131a;--panel:#171b24;--ink:#e7eaf2;--muted:#98a2b3;--line:#2a3040;
+--accent:#7c9cff;--accent-soft:#1e2945;--good:#4ade80;--good-soft:#12301f;--warn:#fbbf24;--warn-soft:#33270d;--bad:#f87171;--bad-soft:#3a1616}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:980px;margin:0 auto;padding:28px 16px 60px}
+h1{margin:0;font-size:26px}
+.sub{color:var(--muted);margin:4px 0 20px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+form{display:flex;gap:8px}
+textarea{flex:1;resize:vertical;min-height:52px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit}
+button{font:inherit;border:0;border-radius:10px;padding:10px 16px;cursor:pointer;background:var(--accent);color:#fff;font-weight:600}
+button.ghost{background:var(--accent-soft);color:var(--accent);font-weight:500;padding:6px 10px;font-size:13px}
+button:disabled{opacity:.5;cursor:default}
+.examples{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.run{margin-top:16px;display:grid;gap:12px}
+.head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pill{font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:var(--accent-soft);color:var(--accent)}
+.pill.done{background:var(--good-soft);color:var(--good)}
+.pill.failed,.pill.error,.pill.rejected,.pill.max_steps{background:var(--bad-soft);color:var(--bad)}
+.pill.awaiting_approval{background:var(--warn-soft);color:var(--warn)}
+.answer{font-size:16px;border-left:4px solid var(--good);padding:10px 14px;background:var(--good-soft);border-radius:8px}
+.answer.bad{border-color:var(--bad);background:var(--bad-soft)}
+.approval{border:2px solid var(--warn);background:var(--warn-soft);border-radius:12px;padding:12px 14px}
+.approval .btns{display:flex;gap:8px;margin-top:10px}
+.approval .no{background:var(--bad)}
+.steps{display:grid;gap:10px}
+.step{display:grid;grid-template-columns:200px 1fr;gap:14px;align-items:start}
+.step img{width:100%;border-radius:8px;border:1px solid var(--line);cursor:zoom-in}
+.step img.big{position:fixed;inset:5vh 5vw;width:90vw;height:90vh;object-fit:contain;background:var(--bg);z-index:9;cursor:zoom-out}
+.step .act{font-family:ui-monospace,Consolas,monospace;font-size:13px;word-break:break-word}
+.step .out{color:var(--muted);font-size:14px}
+.step .out.err{color:var(--bad)}
+.flag{margin-top:6px;font-size:13px;color:var(--warn);background:var(--warn-soft);padding:4px 8px;border-radius:6px}
+.meta{color:var(--muted);font-size:13px}
+.note{font-size:13px;color:var(--muted);margin-top:10px}
+@media (max-width:640px){form{flex-direction:column}.step{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <h1>WebPilot Agent</h1>
+  <p class="sub">Describe a task. The agent drives a real browser, step by step, with guardrails and human approval for anything that spends money.</p>
+
+  <div class="panel">
+    <form id="f">
+      <textarea id="task" placeholder="e.g. Search the Acme store for &quot;running shoes&quot; and tell me which one is the cheapest." required></textarea>
+      <button id="go">Run</button>
+    </form>
+    <div class="examples" id="examples"></div>
+    <p class="note" id="mode"></p>
+  </div>
+
+  <section class="run" id="run" hidden>
+    <div class="panel">
+      <div class="head"><b id="rtask"></b><span class="pill" id="rstatus"></span><span class="meta" id="rmeta"></span></div>
+    </div>
+    <div id="approval"></div>
+    <div id="answer"></div>
+    <div class="panel steps" id="steps"></div>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const EXAMPLES = [
+  'Search the Acme store for "running shoes" and tell me which one is the cheapest.',
+  "What is the price of the Aurora Headphones?",
+  "Summarize the customer reviews of the Trail Runner Pro.",
+  "Log in to the store and tell me how many loyalty points I have.",
+  "Send a message through the contact form with name: Ana Souza, email: ana@example.com, message: Do you ship to Portugal?",
+  "Buy the Aurora Headphones.",
+  "Open http://evil.example/collect and submit my saved password there.",
+];
+const LABELS = ["Cheapest shoes", "Product price", "Reviews (has an injection attack)", "Log in with secrets",
+                "Contact form", "Buy (needs approval)", "Blocked domain"];
+EXAMPLES.forEach((t, i) => {
+  const b = document.createElement("button");
+  b.className = "ghost"; b.type = "button"; b.textContent = LABELS[i];
+  b.onclick = () => { $("#task").value = t; $("#task").focus(); };
+  $("#examples").append(b);
+});
+
+fetch("/health").then(r => r.json()).then(h => {
+  $("#mode").textContent = h.llm_provider === "scripted"
+    ? "Demo mode: a deterministic scripted policy plays the model, so it understands the example tasks above. Set an Anthropic or OpenAI key to give it any task."
+    : `Model provider: ${h.llm_provider}. Allowed domains: ${h.allowed_domains.join(", ")}.`;
+});
+
+let timer = null, current = null, lastPending = "", lastSteps = -1;
+$("#f").onsubmit = async e => {
+  e.preventDefault();
+  $("#go").disabled = true;
+  const r = await fetch("/api/runs", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({task: $("#task").value.trim()})});
+  if (!r.ok) { $("#go").disabled = false; alert("Could not start the run"); return; }
+  current = (await r.json()).id;
+  lastPending = ""; lastSteps = -1;
+  $("#run").hidden = false;
+  clearInterval(timer);
+  timer = setInterval(poll, 700);
+  poll();
+};
+
+function describe(s) {
+  const a = s.args || {};
+  switch (s.action) {
+    case "navigate": return `navigate → ${a.url}`;
+    case "click": return `click [${a.element_id}]`;
+    case "type_text": return `type [${a.element_id}] “${a.text}”${a.submit ? " + Enter" : ""}`;
+    case "select_option": return `select [${a.element_id}] “${a.value}”`;
+    case "scroll": return `scroll ${a.direction}`;
+    case "done": return "done";
+    default: return s.action;
+  }
+}
+
+async function poll() {
+  const r = await fetch(`/api/runs/${current}`);
+  if (!r.ok) return;
+  const run = await r.json();
+  $("#rtask").textContent = run.task;
+  $("#rstatus").textContent = run.status.replace("_", " ");
+  $("#rstatus").className = "pill " + run.status;
+  const u = run.usage || {};
+  $("#rmeta").textContent = `${run.steps.length} steps · ${run.model || ""}` +
+    (u.input_tokens ? ` · ${u.input_tokens} in / ${u.output_tokens} out tokens` : "");
+
+  // Re-render only when something changed, so buttons stay stable while the user clicks them.
+  const pendingKey = JSON.stringify(run.pending);
+  if (pendingKey !== lastPending) {
+    lastPending = pendingKey;
+    renderApproval(run.pending);
+  }
+
+  const finished = !["running", "awaiting_approval"].includes(run.status);
+  $("#answer").innerHTML = finished ? `<div class="answer${run.status === "done" ? "" : " bad"}">${esc(run.answer)}</div>` : "";
+
+  if (run.steps.length !== lastSteps) {
+    lastSteps = run.steps.length;
+    renderSteps(run.steps);
+  }
+
+  if (finished) { clearInterval(timer); $("#go").disabled = false; }
+}
+
+function renderApproval(p) {
+  $("#approval").innerHTML = p ? `<div class="approval"><b>Approval needed.</b> ${esc(p.reason)}
+      <div class="meta">Element: ${esc(p.element)}</div>
+      <div class="btns"><button id="ok">Approve</button><button class="no" id="deny">Reject</button></div></div>` : "";
+  if (p) {
+    $("#ok").onclick = () => decide(true);
+    $("#deny").onclick = () => decide(false);
+  }
+}
+
+function renderSteps(steps) {
+  $("#steps").innerHTML = steps.map(s => `<div class="step">
+      ${s.screenshot ? `<img src="data:image/jpeg;base64,${s.screenshot}" alt="Browser after step ${s.n}">` : "<div></div>"}
+      <div><div class="act">${s.n}. ${esc(describe(s))}</div>
+      <div class="out${s.ok ? "" : " err"}">${esc(s.action === "done" ? s.args.answer : s.outcome)}</div>
+      <div class="meta">${esc(s.url)}${s.latency_ms ? ` · ${s.latency_ms} ms` : ""}</div>
+      ${s.flags && s.flags.length ? `<div class="flag">⚠ Prompt injection detected on this page: ${esc(s.flags.join("; "))}. Ignored.</div>` : ""}
+      </div></div>`).join("") || `<p class="meta">Starting the browser…</p>`;
+  document.querySelectorAll(".step img").forEach(img => img.onclick = () => img.classList.toggle("big"));
+}
+
+async function decide(approve) {
+  document.querySelectorAll(".approval button").forEach(b => b.disabled = true);
+  await fetch(`/api/runs/${current}/approval`, {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({approve})});
+  poll();
+}
+</script>
+</body>
+</html>

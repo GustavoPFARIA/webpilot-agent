@@ -1,0 +1,17 @@
+[project]
+name = "webpilot-agent"
+version = "1.0.0"
+description = "AI browser agent with prompt-injection defenses, human approval and end-to-end evals."
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

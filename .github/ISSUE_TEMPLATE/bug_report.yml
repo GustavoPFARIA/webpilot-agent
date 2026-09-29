@@ -1,0 +1,36 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Never paste real credentials. Use the demo store account and {{secret:NAME}} placeholders."
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: The task you gave the agent and what it did.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Model provider
+      options:
+        - Scripted (LLM_PROVIDER=scripted)
+        - Claude (LLM_PROVIDER=anthropic)
+        - OpenAI (LLM_PROVIDER=openai)
+    validations:
+      required: true
+  - type: textarea
+    id: trace
+    attributes:
+      label: Step trace or logs
+      description: Paste the steps from the UI or `GET /api/runs/{id}`, or the log lines.
+      render: json
