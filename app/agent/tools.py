@@ -35,7 +35,7 @@ TOOLS = [
             "properties": {
                 "element_id": {"type": "integer"},
                 "text": {"type": "string"},
-                "submit": {"type": "boolean", "default": False},
+                "submit": {"type": "boolean", "description": "Press Enter after typing. Defaults to false."},
             },
             "required": ["element_id", "text"],
         },

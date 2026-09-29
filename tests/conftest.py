@@ -1,4 +1,8 @@
 import copy
+import os
+
+# Tests are deterministic and offline: never pick up a real key from a local .env.
+os.environ["LLM_PROVIDER"] = "scripted"
 
 import pytest
 

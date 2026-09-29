@@ -243,12 +243,13 @@ class Agent:
         self.usage["llm_calls"] += 1
         for k in ("input_tokens", "output_tokens", "cache_read_input_tokens"):
             self.usage[k] += int(usage.get(k, 0) or 0)
-        u, s = self.usage, self.s
+        u = self.usage
+        p_in, p_out, p_cache = self.s.prices()
         u["cost_usd"] = round(
-            (u["input_tokens"] * s.price_input_per_mtok + u["output_tokens"] * s.price_output_per_mtok
-             + u["cache_read_input_tokens"] * s.price_cache_read_per_mtok) / 1_000_000,
+            (u["input_tokens"] * p_in + u["output_tokens"] * p_out + u["cache_read_input_tokens"] * p_cache)
+            / 1_000_000,
             6,
-        )  # fmt: skip
+        )
 
     def _over_budget(self) -> str | None:
         u = self.usage

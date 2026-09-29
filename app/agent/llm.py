@@ -12,6 +12,8 @@
 
 import json
 import re
+import threading
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
@@ -76,12 +78,34 @@ class OpenAILLM:
     """Translates the internal (Anthropic-style) messages to OpenAI and back, so
     tools, guardrails, evals and traces stay provider-agnostic."""
 
-    def __init__(self, api_key: str, model: str, timeout: float = 60, max_retries: int = 3):
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        timeout: float = 60,
+        max_retries: int = 3,
+        base_url: str | None = None,
+        min_interval_s: float = 0.0,
+    ):
         import openai
 
-        self.client = openai.OpenAI(api_key=api_key, timeout=timeout, max_retries=max_retries)
+        # base_url makes this adapter work with any OpenAI-compatible API (Gemini, Groq, Ollama...).
+        self.client = openai.OpenAI(api_key=api_key, timeout=timeout, max_retries=max_retries, base_url=base_url)
         self.model = model
         self.name = model
+        self.min_interval_s = min_interval_s
+        self._lock = threading.Lock()
+        self._last_call = 0.0
+
+    def _throttle(self) -> None:
+        """Space calls out to respect free-tier requests-per-minute limits."""
+        if self.min_interval_s <= 0:
+            return
+        with self._lock:
+            wait = self._last_call + self.min_interval_s - time.monotonic()
+            if wait > 0:
+                time.sleep(wait)
+            self._last_call = time.monotonic()
 
     @staticmethod
     def to_openai(system: list[str], messages: list[dict], tools: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -118,6 +142,7 @@ class OpenAILLM:
 
     def complete(self, system: list[str], messages: list[dict], tools: list[dict]) -> LLMResponse:
         oa_messages, oa_tools = self.to_openai(system, messages, tools)
+        self._throttle()
         resp = self.client.chat.completions.create(
             model=self.model, messages=cast(Any, oa_messages), tools=cast(Any, oa_tools)
         )
@@ -383,14 +408,32 @@ class ScriptedLLM:
         return head + (" Customers say: " + " ".join(parts) if parts else "") + note
 
 
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+
 def get_llm() -> LLM:
     s = get_settings()
-    if s.llm_provider == "anthropic":
+    provider = s.resolved_provider()
+    if provider == "anthropic":
         if not s.anthropic_api_key:
             raise RuntimeError("LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY")
         return AnthropicLLM(s.anthropic_api_key, s.anthropic_model, s.llm_timeout_s, s.llm_max_retries)
-    if s.llm_provider == "openai":
+    if provider == "openai":
         if not s.openai_api_key:
             raise RuntimeError("LLM_PROVIDER=openai requires OPENAI_API_KEY")
-        return OpenAILLM(s.openai_api_key, s.openai_model, s.llm_timeout_s, s.llm_max_retries)
-    return ScriptedLLM()
+        return OpenAILLM(
+            s.openai_api_key, s.openai_model, s.llm_timeout_s, s.llm_max_retries,
+            base_url=s.openai_base_url, min_interval_s=s.llm_min_interval_s or 0.0,
+        )  # fmt: skip
+    if provider == "gemini":
+        if not s.gemini_api_key:
+            raise RuntimeError("LLM_PROVIDER=gemini requires GEMINI_API_KEY")
+        # Free tier: ~10 requests/minute, so space calls out and retry 429s patiently.
+        interval = s.llm_min_interval_s if s.llm_min_interval_s is not None else 6.5
+        return OpenAILLM(
+            s.gemini_api_key, s.gemini_model, s.llm_timeout_s, max(s.llm_max_retries, 6),
+            base_url=GEMINI_BASE_URL, min_interval_s=interval,
+        )  # fmt: skip
+    if provider == "scripted":
+        return ScriptedLLM()
+    raise RuntimeError(f"Unknown LLM_PROVIDER '{provider}' (use auto, anthropic, openai, gemini or scripted)")

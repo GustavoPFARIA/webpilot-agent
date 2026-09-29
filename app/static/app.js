@@ -35,8 +35,8 @@ EXAMPLES.forEach((t, i) => {
 
 fetch("/health").then(r => r.json()).then(h => {
   $("#mode").textContent = h.llm_provider === "scripted"
-    ? "Demo mode: a deterministic scripted policy plays the model, so it understands the example tasks above. Set an Anthropic or OpenAI key to give it any task."
-    : `Model provider: ${h.llm_provider}. Allowed domains: ${h.allowed_domains.join(", ")}.`;
+    ? "No model API key configured, so the offline test policy is running: it only understands the example tasks. Add a free Gemini key (see README) to give the agent any task."
+    : `Model: ${h.llm_provider}. Allowed sites: ${h.allowed_domains.join(", ")}.`;
 });
 
 let timer = null, current = null, lastPending = "", lastSteps = -1;

@@ -69,7 +69,9 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt
       - run: playwright install --with-deps chromium
-      - name: Run evals (fail below 100%)
+      - name: Run evals with the offline policy (fail below 100%)
+        env:
+          LLM_PROVIDER: scripted
         run: python -m evals.run_evals --min-pass-rate 1.0
       - name: Publish eval report
         if: always()

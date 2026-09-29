@@ -45,7 +45,7 @@ These controls map to the **OWASP Top 10 for LLM Applications (2025)** (LLM01, L
 ```mermaid
 flowchart LR
     U[User task] --> A[Agent loop]
-    A -->|"page state: URL, element ids, untrusted text"| M[LLM<br/>Claude / OpenAI / scripted]
+    A -->|"page state: URL, element ids, untrusted text"| M[LLM<br/>Claude / OpenAI / Gemini]
     M -->|one tool call| G{Guardrails<br/>in code}
     G -->|"off allow-list, internal IP, literal password"| X[Blocked → error back to model]
     G -->|"pay / buy / delete"| H[Human approval]
@@ -90,17 +90,24 @@ docker compose up --build
 
 Then paste the token in the UI when it asks.
 
-### Demo mode vs. a real model
+### Connect a model (free option included)
 
-Out of the box, `LLM_PROVIDER=scripted` runs a **deterministic scripted policy** instead of an LLM, so the demo, tests and CI work offline with no API key. It reads the same page-state text a model would and uses the same tool calls, but it only understands the kinds of tasks in the example buttons.
+The agent picks the model from whichever key is in `.env` (`LLM_PROVIDER=auto`):
 
-To give the agent **any** task on any allowed site, plug in a model:
+| Provider | Cost | Setup |
+|---|---|---|
+| **Google Gemini** | **Free tier, no card** | Create a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey), then `GEMINI_API_KEY=...` |
+| Anthropic Claude | Paid | `ANTHROPIC_API_KEY=...` (tool use + prompt caching) |
+| OpenAI | Paid | `OPENAI_API_KEY=...` |
+| Any OpenAI-compatible server | Varies (Ollama is free and local) | `OPENAI_API_KEY`, `OPENAI_BASE_URL=http://localhost:11434/v1`, `OPENAI_MODEL=...` |
 
 ```bash
-cp .env.example .env
-# set LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY=...   (or openai / OPENAI_API_KEY)
-# and add the sites you want in ALLOWED_DOMAINS
+cp .env.example .env    # then paste your key, e.g. GEMINI_API_KEY=AIza...
 ```
+
+The free Gemini tier is rate-limited, so calls are spaced automatically (`LLM_MIN_INTERVAL_S`) and 429s are retried with backoff. Free-tier prompts may be used by Google to improve its products, so use it with test sites and test data, not private information. To browse real websites, add them to `ALLOWED_DOMAINS`.
+
+With no key at all, a deterministic offline policy runs instead. It exists so the tests and CI never depend on an external API. It understands only the example tasks, and the UI says so.
 
 ## Evaluation
 
@@ -173,7 +180,7 @@ app/
   agent/
     agent.py        # observe → decide → check → act loop, step trace, usage
     guardrails.py   # URL policy (allow-list, SSRF), injection detection, secrets, approval rules
-    llm.py          # Claude (prompt caching) and OpenAI adapters + scripted policy
+    llm.py          # Claude (prompt caching), OpenAI-compatible (OpenAI, Gemini, Ollama) + offline test policy
     tools.py        # tool schemas the model can call
     prompts.py      # system prompt
   browser/

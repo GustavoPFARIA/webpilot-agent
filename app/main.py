@@ -19,7 +19,7 @@ LOOPBACK = {"127.0.0.1", "::1"}
 
 app = FastAPI(
     title="WebPilot Agent",
-    version="1.2.0",
+    version="1.3.0",
     description="AI agent that completes tasks in a real browser, with guardrails and human approval.",
 )
 app.include_router(sandbox.router)
@@ -77,7 +77,7 @@ def health():
     s = get_settings()
     return {
         "status": "ok",
-        "llm_provider": s.llm_provider,
+        "llm_provider": s.resolved_provider(),
         "allowed_domains": s.allowed_domains,
         "auth": "api_keys" if s.api_keys else "loopback_only",
     }

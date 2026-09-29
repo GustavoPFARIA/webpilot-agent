@@ -4,7 +4,11 @@ Settings are read from environment variables or a `.env` file (see [`.env.exampl
 
 | Variable | Default | Description |
 |---|---|---|
-| `LLM_PROVIDER` | `scripted` | `scripted` (offline deterministic policy), `anthropic` or `openai` |
+| `LLM_PROVIDER` | `auto` | `auto` (first key found: Anthropic, OpenAI, Gemini; offline policy if none), `anthropic`, `openai`, `gemini` or `scripted` |
+| `GEMINI_API_KEY` | – | Free tier at aistudio.google.com/apikey |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Any Gemini model with function calling |
+| `OPENAI_BASE_URL` | – | Any OpenAI-compatible server (Ollama, Groq, OpenRouter, vLLM) |
+| `LLM_MIN_INTERVAL_S` | provider default | Minimum seconds between model calls (Gemini free tier: 6.5) |
 | `ANTHROPIC_API_KEY` | – | Required for `anthropic` |
 | `ANTHROPIC_MODEL` | `claude-sonnet-5-5` | Any Claude model with tool use |
 | `OPENAI_API_KEY` | – | Required for `openai` |
@@ -33,7 +37,7 @@ Settings are read from environment variables or a `.env` file (see [`.env.exampl
 | `RUN_TIMEOUT_S` | `600` | Wall-clock limit per run |
 | `MAX_TOKENS_PER_RUN` | `300000` | Input + output + cache-read tokens |
 | `MAX_COST_PER_RUN_USD` | `1.00` | Stops the run with `budget_exceeded` |
-| `PRICE_INPUT_PER_MTOK` / `PRICE_OUTPUT_PER_MTOK` / `PRICE_CACHE_READ_PER_MTOK` | `3.00` / `15.00` / `0.30` | USD per million tokens, for cost tracking. Set them to your model's prices |
+| `PRICE_INPUT_PER_MTOK` / `PRICE_OUTPUT_PER_MTOK` / `PRICE_CACHE_READ_PER_MTOK` | provider default | USD per million tokens for cost tracking. Defaults: Claude 3.00 / 15.00 / 0.30, OpenAI 0.40 / 1.60 / 0.10, Gemini free tier 0 |
 
 ## Resilience and observability
 

@@ -7,7 +7,8 @@ whether a human approval was requested, and whether any secret value ever
 reached the LLM.
 
     python -m evals.run_evals                  # scripted policy (offline, CI)
-    LLM_PROVIDER=anthropic python -m evals.run_evals   # a real model
+    python -m evals.run_evals                          # with GEMINI_API_KEY (free) in .env: a real model
+    LLM_PROVIDER=anthropic python -m evals.run_evals   # pick a specific provider
 """
 
 import argparse
@@ -142,8 +143,11 @@ async def main_async(min_pass_rate: float) -> int:
         results = [await run_case(c, f"http://127.0.0.1:{port}") for c in cases]
     finally:
         server.should_exit = True
-    md = report(results, get_llm().name)
-    (HERE / "results.md").write_text(md, encoding="utf-8")
+    model = get_llm().name
+    md = report(results, model)
+    # The offline policy's report is the CI baseline; real models get their own file.
+    name = "results.md" if model == "scripted-policy" else f"results-{model}.md"
+    (HERE / name).write_text(md, encoding="utf-8")
     print(md)
     rate = sum(r["passed"] for r in results) / len(results)
     return 0 if rate >= min_pass_rate else 1

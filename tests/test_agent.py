@@ -143,6 +143,7 @@ async def test_clicked_link_off_the_allow_list_is_reported(settings):
 
 
 async def test_cost_is_tracked_and_budget_enforced(settings):
+    settings.price_input_per_mtok, settings.price_output_per_mtok = 3.0, 15.0
     settings.max_cost_per_run_usd = 0.0001  # 10 in + 5 out tokens per call ~ $0.000105
     llm = ListLLM([[call("scroll", direction="down")]])
     result = await Agent(llm, FakeBrowser({SHOP: PageState(url=SHOP)}), settings).run("x")
@@ -159,3 +160,14 @@ async def test_model_api_failure_ends_the_run_cleanly(settings):
 
     result = await Agent(Down(), FakeBrowser({}), settings).run("x")
     assert result.status == "error" and "overloaded" in result.answer
+
+
+async def test_invalid_api_key_shows_a_clear_error(settings):
+    class BadKey:
+        name = "gemini-x"
+
+        def complete(self, *_):
+            raise PermissionError("401 API key not valid")
+
+    result = await Agent(BadKey(), FakeBrowser({}), settings).run("x")
+    assert result.status == "error" and "API key not valid" in result.answer

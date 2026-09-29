@@ -56,6 +56,7 @@ def _openai(response):
     llm = OpenAILLM.__new__(OpenAILLM)
     llm.client = NS(chat=NS(completions=NS(create=lambda **_: response)))
     llm.model = llm.name = "gpt-x"
+    llm.min_interval_s = 0.0
     return llm
 
 
@@ -103,3 +104,47 @@ def test_telemetry_is_off_without_an_exporter(monkeypatch):
     monkeypatch.setattr(telemetry, "_configured", False)
     telemetry.setup(console=False)
     assert telemetry._configured is False
+
+
+def test_auto_provider_picks_the_first_configured_key():
+    from app.config import Settings
+
+    assert Settings(_env_file=None, llm_provider="auto").resolved_provider() == "scripted"
+    assert Settings(_env_file=None, llm_provider="auto", gemini_api_key="g").resolved_provider() == "gemini"
+    both = Settings(_env_file=None, llm_provider="auto", gemini_api_key="g", anthropic_api_key="a")
+    assert both.resolved_provider() == "anthropic"
+
+
+def test_prices_default_per_provider_and_can_be_overridden():
+    from app.config import Settings
+
+    assert Settings(_env_file=None, llm_provider="gemini").prices() == (0.0, 0.0, 0.0)  # free tier
+    assert Settings(_env_file=None, llm_provider="anthropic").prices() == (3.0, 15.0, 0.3)
+    custom = Settings(_env_file=None, llm_provider="gemini", price_input_per_mtok=0.3, price_output_per_mtok=2.5)
+    assert custom.prices() == (0.3, 2.5, 0.0)
+
+
+def test_gemini_uses_the_openai_compatible_endpoint_with_throttling(monkeypatch):
+    from app.agent.llm import GEMINI_BASE_URL
+
+    s = get_settings()
+    monkeypatch.setattr(s, "llm_provider", "gemini")
+    monkeypatch.setattr(s, "gemini_api_key", "AIza-test")
+    llm = get_llm()
+    assert isinstance(llm, OpenAILLM)
+    assert str(llm.client.base_url) == GEMINI_BASE_URL
+    assert llm.min_interval_s == 6.5 and llm.client.max_retries >= 6
+
+
+def test_throttle_spaces_out_calls(monkeypatch):
+    import app.agent.llm as mod
+
+    sleeps: list[float] = []
+    clock = iter([100.0, 100.0, 101.0, 107.5])
+    monkeypatch.setattr(mod.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(mod.time, "sleep", sleeps.append)
+    llm = _openai(_openai_response([]))
+    llm.min_interval_s, llm._last_call, llm._lock = 6.5, 0.0, mod.threading.Lock()
+    llm._throttle()  # first call: no wait
+    llm._throttle()  # 1 s later: waits the remaining 5.5 s
+    assert sleeps == [5.5]

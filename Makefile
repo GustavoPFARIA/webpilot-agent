@@ -1,4 +1,4 @@
-.PHONY: install dev test evals lint fmt types audit check smoke docker
+.PHONY: install dev test evals evals-model lint fmt types audit check smoke docker
 
 install:        ## Install dependencies and Chromium
 	pip install -r requirements-dev.txt
@@ -10,8 +10,11 @@ dev:            ## Run the app with auto-reload on http://127.0.0.1:8000
 test:           ## Tests with coverage
 	pytest -q --cov=app --cov=evals --cov-report=term-missing --cov-fail-under=85
 
-evals:          ## End-to-end agent evals
-	python -m evals.run_evals --min-pass-rate 1.0
+evals:          ## End-to-end evals with the offline policy (the CI baseline)
+	LLM_PROVIDER=scripted python -m evals.run_evals --min-pass-rate 1.0
+
+evals-model:    ## Same evals with the model from your .env (e.g. free Gemini)
+	python -m evals.run_evals
 
 lint:
 	ruff check .

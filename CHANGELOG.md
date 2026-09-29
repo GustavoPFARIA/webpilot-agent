@@ -2,6 +2,18 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [Semantic Versioning](https://semver.org).
 
+## [1.3.0] - 2026-09-29
+
+### Added
+- Google Gemini as a model provider through its OpenAI-compatible API, including the **free tier** (no card needed).
+- `OPENAI_BASE_URL`, so any OpenAI-compatible server works (Ollama locally, Groq, OpenRouter, vLLM).
+- `LLM_PROVIDER=auto` (new default): uses whichever key is configured, and falls back to the offline policy only when there is none.
+- Client-side request spacing (`LLM_MIN_INTERVAL_S`) and longer retries for free-tier rate limits.
+- Per-provider default prices for cost tracking (Gemini free tier = $0).
+
+### Changed
+- Tool schemas avoid keywords that some providers reject (`default`).
+
 ## [1.2.0] - 2026-09-29
 
 ### Added

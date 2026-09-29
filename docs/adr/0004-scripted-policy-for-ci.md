@@ -10,5 +10,5 @@ Implement `ScriptedLLM`, which speaks the same message and tool protocol as the 
 
 ## Consequences
 - The evals are deterministic and free. They measure the *system*, not model quality.
-- The policy is not a general agent, and the UI says so in demo mode.
+- The policy is not a general agent, and the UI says so when no model key is configured.
 - Model quality is measured by running the same dataset with a real provider.
