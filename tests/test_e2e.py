@@ -61,7 +61,7 @@ async def test_mcp_client_can_delegate_a_task(base_url):
     assert data["status"] == "done" and "149.00" in data["answer"]
 
 
-def test_full_stack_over_http_with_human_approval(base_url, monkeypatch):
+def test_full_stack_over_http_with_human_approval(base_url):
     """The real API, background run, real browser, approval over HTTP, order on the server."""
     import time
 
@@ -70,7 +70,7 @@ def test_full_stack_over_http_with_human_approval(base_url, monkeypatch):
     from app import sandbox
     from app.config import get_settings
 
-    monkeypatch.setattr(get_settings(), "public_url", base_url)
+    assert get_settings().public_url is None  # the start page comes from the request's own address
     sandbox.reset()
     with httpx.Client(base_url=base_url, timeout=10) as http:
         run_id = http.post("/api/runs", json={"task": "Buy the Aurora Headphones."}).json()["id"]

@@ -1,6 +1,6 @@
 [project]
 name = "webpilot-agent"
-version = "1.3.0"
+version = "1.3.1"
 description = "AI browser agent with prompt-injection defenses, human approval and end-to-end evals."
 requires-python = ">=3.12"
 

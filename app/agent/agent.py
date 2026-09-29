@@ -107,7 +107,7 @@ class Agent:
     async def _run(self, task: str) -> RunResult:
         steps: list[Step] = []
         page, flags, url = await self.observe()
-        start_url = f"{self.s.public_url}/sandbox/"
+        start_url = f"{(self.s.public_url or 'http://127.0.0.1:8000').rstrip('/')}/sandbox/"
         messages: list[dict] = [{"role": "user", "content": start_message(task, start_url, page)}]
 
         for n in range(1, self.s.max_steps + 1):

@@ -19,7 +19,7 @@ LOOPBACK = {"127.0.0.1", "::1"}
 
 app = FastAPI(
     title="WebPilot Agent",
-    version="1.3.0",
+    version="1.3.1",
     description="AI agent that completes tasks in a real browser, with guardrails and human approval.",
 )
 app.include_router(sandbox.router)
@@ -84,9 +84,9 @@ def health():
 
 
 @app.post("/api/runs", status_code=202)
-async def create_run(body: RunRequest, user: str = Depends(current_user)):
+async def create_run(body: RunRequest, request: Request, user: str = Depends(current_user)):
     try:
-        run = manager.start(body.task, owner=user)
+        run = manager.start(body.task, owner=user, base_url=str(request.base_url).rstrip("/"))
     except LimitError as exc:
         raise HTTPException(429, str(exc), headers={"Retry-After": "60"}) from exc
     return {"id": run.id, "status": run.status}

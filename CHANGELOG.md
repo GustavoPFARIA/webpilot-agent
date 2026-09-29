@@ -2,6 +2,11 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [Semantic Versioning](https://semver.org).
 
+## [1.3.1] - 2026-09-29
+
+### Fixed
+- The agent's start page now comes from the address the user opened, so the app works on any port without setting `PUBLIC_URL` (found by testing a fresh clone the way a reviewer would).
+
 ## [1.3.0] - 2026-09-29
 
 ### Added

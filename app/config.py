@@ -43,7 +43,8 @@ class Settings(BaseSettings):
     browser_denied_paths: list[str] = ["/api/", "/docs", "/redoc", "/openapi.json", "/health", "/sandbox/_state"]
 
     # Where this server is reachable; the demo store lives at {public_url}/sandbox.
-    public_url: str = "http://127.0.0.1:8000"
+    # Unset = taken from the request that started the run, so any port just works.
+    public_url: str | None = None
 
     # API access. Maps bearer token -> user id. When empty, the API only accepts
     # requests from this machine (loopback), as user "local": secure by default.

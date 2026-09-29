@@ -26,6 +26,7 @@ class Run:
     id: str
     task: str
     owner: str = "local"
+    base_url: str | None = None  # where the user reached this server; the default start page
     status: str = "running"  # running | awaiting_approval | done | failed | rejected | max_steps | error
     answer: str = ""
     steps: list[Step] = field(default_factory=list)
@@ -100,9 +101,9 @@ class RunManager:
             raise LimitError(f"At most {s.max_concurrent_runs} runs at a time; wait for one to finish.")
         window.append(now)
 
-    def start(self, task: str, owner: str = "local") -> Run:
+    def start(self, task: str, owner: str = "local", base_url: str | None = None) -> Run:
         self._check_limits(owner)
-        run = Run(id=secrets.token_urlsafe(12), task=task, owner=owner)
+        run = Run(id=secrets.token_urlsafe(12), task=task, owner=owner, base_url=base_url)
         self.runs[run.id] = run
         finished = [k for k, r in self.runs.items() if r.status not in ACTIVE]
         while len(self.runs) > self.max_runs and finished:  # keep memory bounded
@@ -114,6 +115,8 @@ class RunManager:
 
     async def _execute(self, run: Run) -> None:
         s = get_settings()
+        if not s.public_url and run.base_url:
+            s = s.model_copy(update={"public_url": run.base_url})
         try:
             llm = get_llm()
             run.model = llm.name

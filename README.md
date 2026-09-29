@@ -77,7 +77,7 @@ playwright install chromium          # or set BROWSER_CHANNEL=msedge / chrome
 uvicorn app.main:app --port 8000
 ```
 
-Open **http://127.0.0.1:8000**, pick an example and click **Run**. If you use another port, set `PUBLIC_URL` to match, because the agent starts from `{PUBLIC_URL}/sandbox/`.
+Open **http://127.0.0.1:8000**, pick an example and click **Run**. Any port works: the agent starts from the address you opened.
 
 `make install`, `make dev`, `make check` and `make smoke` wrap the common commands (see the [Makefile](Makefile)).
 
