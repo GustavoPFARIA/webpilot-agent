@@ -59,3 +59,49 @@ async def test_mcp_client_can_delegate_a_task(base_url):
     assert not res.is_error, res.content
     data = res.structured_content
     assert data["status"] == "done" and "149.00" in data["answer"]
+
+
+def test_full_stack_over_http_with_human_approval(base_url, monkeypatch):
+    """The real API, background run, real browser, approval over HTTP, order on the server."""
+    import time
+
+    import httpx
+
+    from app import sandbox
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "public_url", base_url)
+    sandbox.reset()
+    with httpx.Client(base_url=base_url, timeout=10) as http:
+        run_id = http.post("/api/runs", json={"task": "Buy the Aurora Headphones."}).json()["id"]
+        run: dict = {}
+        for _ in range(150):
+            run = http.get(f"/api/runs/{run_id}").json()
+            if run["status"] == "error" and "Executable doesn't exist" in run["answer"]:
+                pytest.skip("No Chromium available for Playwright")
+            if run["pending"]:
+                assert http.post(f"/api/runs/{run_id}/approval", json={"approve": True}).status_code == 200
+            if run["status"] not in ("running", "awaiting_approval"):
+                break
+            time.sleep(0.2)
+    assert run["status"] == "done", run["answer"]
+    assert run["steps"][-2]["screenshot"]  # the UI gets a screenshot per step
+    assert len(sandbox.STATE["orders"]) == 1
+
+
+async def test_unreachable_site_fails_cleanly():
+    """A dead allowed host must become a recoverable error, not a crashed run."""
+    from app.agent.guardrails import url_policy
+    from app.browser.driver import ActionError, PlaywrightBrowser
+    from app.config import get_settings
+
+    s = get_settings()
+    try:
+        async with PlaywrightBrowser.launch(True, s.browser_channel, url_policy(["127.0.0.1"], [])) as browser:
+            with pytest.raises(ActionError, match="Could not open"):
+                await browser.goto(f"http://127.0.0.1:{free_port()}/")
+            assert (await browser.state()).url  # the page is still usable afterwards
+    except Exception as exc:
+        if "Executable doesn't exist" in str(exc):
+            pytest.skip("No Chromium available for Playwright")
+        raise

@@ -1,6 +1,6 @@
 [project]
 name = "webpilot-agent"
-version = "1.1.0"
+version = "1.2.0"
 description = "AI browser agent with prompt-injection defenses, human approval and end-to-end evals."
 requires-python = ">=3.12"
 
@@ -9,9 +9,23 @@ line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM"]
+select = ["E", "F", "I", "B", "UP", "SIM", "S", "ASYNC", "RUF", "PT"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "PT018"]  # asserts, fake credentials and grouped asserts are fine in tests
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.mypy]
+files = ["app", "evals"]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.coverage.run]
+omit = ["app/mcp_server.py"]  # exercised through a real MCP client in tests/test_e2e.py, in a separate task

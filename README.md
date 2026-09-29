@@ -1,7 +1,10 @@
 # WebPilot Agent
 
 [![CI](https://github.com/GustavoPFARIA/webpilot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/GustavoPFARIA/webpilot-agent/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+[![CodeQL](https://github.com/GustavoPFARIA/webpilot-agent/actions/workflows/codeql.yml/badge.svg)](https://github.com/GustavoPFARIA/webpilot-agent/actions/workflows/codeql.yml)
+![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen)
+![Evals](https://img.shields.io/badge/evals-16%2F16-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.12%20%7C%203.13-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
 ![Playwright](https://img.shields.io/badge/Playwright-2EAD33?logo=playwright&logoColor=white)
 ![Claude](https://img.shields.io/badge/Claude-tool_use-D97757)
@@ -62,7 +65,7 @@ Every step is recorded with the action, the outcome, the URL, the latency, secur
 
 ## Quick start
 
-**Requirements:** Python 3.12. The first command below downloads Chromium; Microsoft Edge or Chrome also work.
+**Requirements:** Python 3.12 or 3.13. The first command below downloads Chromium; Microsoft Edge or Chrome also work.
 
 ```bash
 git clone https://github.com/GustavoPFARIA/webpilot-agent.git
@@ -74,7 +77,9 @@ playwright install chromium          # or set BROWSER_CHANNEL=msedge / chrome
 uvicorn app.main:app --port 8000
 ```
 
-Open **http://127.0.0.1:8000**, pick an example and click **Run**.
+Open **http://127.0.0.1:8000**, pick an example and click **Run**. If you use another port, set `PUBLIC_URL` to match, because the agent starts from `{PUBLIC_URL}/sandbox/`.
+
+`make install`, `make dev`, `make check` and `make smoke` wrap the common commands (see the [Makefile](Makefile)).
 
 Or run it with Docker. Requests into the container aren't loopback, so set a token first:
 
@@ -117,12 +122,23 @@ Each case starts a real server and a real browser, then grades **outcomes, not t
 
 Current results are in [evals/results.md](evals/results.md). The secret-leak check has already paid for itself. It caught a real bug: a typed email appeared in the element list, which the text redaction didn't cover. See [docs/evaluation.md](docs/evaluation.md).
 
-## Tests
+## Quality and engineering practices
 
 ```bash
-pytest -q        # 68 tests: guardrails, SSRF, auth, limits, agent loop, telemetry, real-browser end-to-end, MCP
-ruff check . && ruff format --check .
+make check   # everything CI runs: lint, types, dependency audit, tests with coverage, evals
 ```
+
+| Practice | Tooling |
+|---|---|
+| **79 tests, 89% coverage** (CI fails below 85%) | pytest, pytest-asyncio, pytest-cov: guardrails, SSRF, auth, limits, provider adapters, agent loop, telemetry, real-browser end-to-end, full stack over HTTP, MCP |
+| **16 end-to-end evals** (CI fails below 100%) | Real Chromium against the test store, graded on server-side evidence |
+| Lint and format, including security rules | Ruff (`S` = Bandit rules, `ASYNC`, `B`, `RUF`, `PT`, …) |
+| Static typing | mypy |
+| Security scanning | CodeQL (Python, JavaScript, Actions), pip-audit for known CVEs, Dependabot |
+| Supported Pythons | CI matrix on 3.12 and 3.13 |
+| Working container | CI builds the Docker image, **runs it, and completes a real task inside it** (`scripts/smoke_test.py`) |
+| Pre-commit hooks | Ruff, mypy, YAML/JSON checks, private-key detection |
+| Design records | [ADRs](docs/adr/) for every major decision |
 
 The agent-loop tests use a **deliberately gullible fake model**, one that obeys the injected instructions. They prove the guarantees hold in code even when the model fails.
 

@@ -4,9 +4,7 @@
 
 ## How it was tested
 
-- [ ] `ruff check . && ruff format --check .`
-- [ ] `pytest -q`
-- [ ] `python -m evals.run_evals --min-pass-rate 1.0`
+- [ ] `make check` passes (lint, types, audit, tests with coverage, evals)
 - [ ] New agent behavior has an eval case in `evals/dataset.json`
 
 ## Safety

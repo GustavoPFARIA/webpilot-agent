@@ -2,6 +2,21 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [Semantic Versioning](https://semver.org).
 
+## [1.2.0] - 2026-09-29
+
+### Added
+- Engineering quality gates in CI: mypy, Ruff security rules (Bandit), pip-audit, coverage floor (85%), Python 3.12 + 3.13 matrix, CodeQL.
+- Docker smoke test: CI runs the image and completes a real browser task inside it (`scripts/smoke_test.py`).
+- Tests for the Claude and OpenAI adapters, for the full stack over HTTP with approval, and for unreachable sites (79 in total, 89% coverage).
+- Pre-commit hooks, Makefile, UI example for the open-redirect attack, refreshed demo GIF.
+
+### Fixed
+- The OpenAI adapter crashed on custom tool calls, missing `usage` or malformed JSON arguments; it now degrades to a recoverable error.
+- An unreachable allowed host crashed the network guard; the navigation now fails cleanly.
+- A backstop navigation task could be garbage-collected before running.
+- The API-token bar was always visible (`display` overrode `hidden`).
+- Clearer messages when a link, redirect or form is blocked.
+
 ## [1.1.0] - 2026-09-29
 
 ### Security

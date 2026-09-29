@@ -39,6 +39,7 @@ class PlaywrightBrowser:
         self.page = page
         self.policy = policy
         self._blocked: list[str] = []
+        self._tasks: set[asyncio.Future] = set()
 
     @classmethod
     @asynccontextmanager
@@ -69,6 +70,9 @@ class PlaywrightBrowser:
     # no matter how the navigation started: a typed URL, a clicked link, a form
     # submit, a script, an image beacon or a server redirect.
 
+    def _violation(self, url: str) -> str | None:
+        return self.policy(url) if self.policy else None
+
     def _block(self, url: str, reason: str) -> None:
         log.warning("network policy blocked %s: %s", url, reason)
         self._blocked.append(f"{url} ({reason})")
@@ -79,7 +83,7 @@ class PlaywrightBrowser:
         if url.startswith(("data:", "blob:", "about:")):
             await route.continue_()
             return
-        reason = self.policy(url)
+        reason = self._violation(url)
         if reason:
             self._block(url, reason)
             await route.abort("blockedbyclient")
@@ -87,11 +91,16 @@ class PlaywrightBrowser:
         if request.is_navigation_request():
             # Redirects are not re-routed by Playwright, so fetch without following
             # them and check the Location before letting the browser go there.
-            response = await route.fetch(max_redirects=0)
+            try:
+                response = await route.fetch(max_redirects=0)
+            except Exception as exc:  # host down, DNS failure, TLS error...
+                log.info("navigation to %s failed: %s", url, str(exc).splitlines()[0])
+                await route.abort("failed")
+                return
             location = response.headers.get("location")
             if 300 <= response.status < 400 and location:
                 target = urljoin(url, location)
-                reason = self.policy(target)
+                reason = self._violation(target)
                 if reason:
                     self._block(target, reason)
                     await route.abort("blockedbyclient")
@@ -103,10 +112,13 @@ class PlaywrightBrowser:
     def _check_frame(self, frame) -> None:
         # Backstop: if a main-frame navigation ever lands off-policy, leave immediately.
         if frame == self.page.main_frame and frame.url.startswith(("http://", "https://")):
-            reason = self.policy(frame.url)
+            reason = self._violation(frame.url)
             if reason:
                 self._block(frame.url, reason)
-                asyncio.ensure_future(self.page.goto("about:blank"))
+                # Event handlers are sync; keep a reference so the task isn't garbage-collected.
+                task = asyncio.ensure_future(self.page.goto("about:blank"))
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
 
     def drain_blocked(self) -> list[str]:
         blocked, self._blocked = self._blocked, []

@@ -137,7 +137,7 @@ class Agent:
                 outcome, ok, status = await self._act(name, args)
                 blocked = self.browser.drain_blocked()
                 if blocked:  # e.g. a clicked link or redirect tried to leave the allow-list
-                    outcome += " Blocked by network policy: " + "; ".join(blocked)
+                    outcome += ". Blocked by network policy: " + "; ".join(blocked)
                     ok = False
                 span.set_attribute("webpilot.ok", ok)
                 span.set_attribute("webpilot.outcome", outcome[:200])

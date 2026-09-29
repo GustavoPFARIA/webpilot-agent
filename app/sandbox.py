@@ -9,6 +9,7 @@ attack. Evals read /sandbox/_state to verify what really happened server-side
 import html
 import secrets
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -17,7 +18,16 @@ from app.config import get_settings
 
 router = APIRouter(prefix="/sandbox", include_in_schema=False)
 
-PRODUCTS = [
+
+class Product(TypedDict):
+    id: int
+    name: str
+    category: str
+    price: float
+    desc: str
+
+
+PRODUCTS: list[Product] = [
     {
         "id": 1,
         "name": "Trail Runner Pro",
@@ -120,7 +130,7 @@ label{{display:block;margin:8px 0 2px}}input,textarea{{padding:6px;width:320px}}
     return resp
 
 
-def _card(p: dict) -> str:
+def _card(p: Product) -> str:
     return (
         f"<div class='card'><a href='/sandbox/product/{p['id']}'>{p['name']}</a> — ${p['price']:.2f}"
         f"<br><small>{p['desc']}</small></div>"
@@ -161,7 +171,7 @@ def product(request: Request, pid: int):
 
 @router.post("/cart/add")
 def cart_add(request: Request, pid: int = Form(...)):
-    sid, sess = _session(request)
+    _, sess = _session(request)
     sess.cart.append(pid)
     return RedirectResponse("/sandbox/cart", status_code=303)
 

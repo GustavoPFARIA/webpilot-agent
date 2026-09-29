@@ -13,7 +13,7 @@
 import json
 import re
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from app.config import get_settings
 
@@ -52,8 +52,14 @@ class AnthropicLLM:
         # step, so each step after the first reads them at a fraction of the input price.
         blocks = [{"type": "text", "text": system[0], "cache_control": {"type": "ephemeral"}}]
         blocks += [{"type": "text", "text": text} for text in system[1:]]
+        # Internal messages are plain dicts in the Messages API shape; the SDK's
+        # TypedDicts describe the same structure.
         resp = self.client.messages.create(
-            model=self.model, max_tokens=1024, system=blocks, messages=messages, tools=tools
+            model=self.model,
+            max_tokens=1024,
+            system=cast(Any, blocks),
+            messages=cast(Any, messages),
+            tools=cast(Any, tools),
         )
         content = [b.model_dump(include={"type", "text", "id", "name", "input"}) for b in resp.content]
         return LLMResponse(
@@ -112,22 +118,36 @@ class OpenAILLM:
 
     def complete(self, system: list[str], messages: list[dict], tools: list[dict]) -> LLMResponse:
         oa_messages, oa_tools = self.to_openai(system, messages, tools)
-        resp = self.client.chat.completions.create(model=self.model, messages=oa_messages, tools=oa_tools)
+        resp = self.client.chat.completions.create(
+            model=self.model, messages=cast(Any, oa_messages), tools=cast(Any, oa_tools)
+        )
         msg = resp.choices[0].message
         content: list[dict] = [{"type": "text", "text": msg.content}] if msg.content else []
         content += [
-            {"type": "tool_use", "id": c.id, "name": c.function.name, "input": json.loads(c.function.arguments or "{}")}
+            {"type": "tool_use", "id": c.id, "name": c.function.name, "input": _parse_args(c.function.arguments)}
             for c in msg.tool_calls or []
+            if c.type == "function"  # custom (free-text) tool calls are not used by this agent
         ]
-        details = resp.usage.prompt_tokens_details
+        usage = resp.usage
+        details = usage.prompt_tokens_details if usage else None
         return LLMResponse(
             content=content,
             usage={
-                "input_tokens": resp.usage.prompt_tokens,
-                "output_tokens": resp.usage.completion_tokens,
+                "input_tokens": usage.prompt_tokens if usage else 0,
+                "output_tokens": usage.completion_tokens if usage else 0,
                 "cache_read_input_tokens": (details.cached_tokens or 0) if details else 0,
             },
         )
+
+
+def _parse_args(raw: str | None) -> dict:
+    """Models occasionally emit malformed JSON arguments. Return {} so the agent
+    reports "invalid arguments" back to the model instead of crashing the run."""
+    try:
+        value = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 # --- deterministic scripted policy ------------------------------------------
@@ -175,8 +195,20 @@ QUERY_RE = re.compile(
 FIELD_RE = re.compile(r"\b(name|email|message)\s*[:=]\s*(.+?)(?=,\s*(?:name|email|message)\s*[:=]|$)", re.I)
 
 
+def _blocked_reason(view: View) -> str:
+    m = re.search(r"Blocked by network policy: (\S+) \((.+)\)$", view.last_result)
+    if not m:
+        return view.last_result
+    return f"The page tried to send the browser to {m.group(1)}. {m.group(2)}"
+
+
+def _line(text: str, pattern: str) -> str:
+    m = re.search(pattern, text, re.M)
+    return m.group(1) if m else ""
+
+
 def _query(task: str) -> str:
-    quoted = re.search(r"(?:^|\s)[\"'“‘](.+?)[\"'”’]", task)
+    quoted = re.search(r"(?:^|\s)[\"'“‘](.+?)[\"'”’]", task)  # noqa: RUF001 (typographic quotes on purpose)
     if quoted:
         return quoted.group(1)
     m = QUERY_RE.search(task)
@@ -198,7 +230,7 @@ class ScriptedLLM:
 
     def complete(self, system: list[str], messages: list[dict], tools: list[dict]) -> LLMResponse:
         first = messages[0]["content"]
-        task = re.search(r"^Task: (.*)$", first, re.M).group(1)
+        task = _line(first, r"^Task: (.*)$")
         last = messages[-1]["content"]
         view = parse_view(last if isinstance(last, str) else last[0]["content"])
         history = [b for m in messages if m["role"] == "assistant" for b in m["content"] if b["type"] == "tool_use"]
@@ -211,7 +243,7 @@ class ScriptedLLM:
             return self._done("I couldn't finish the task within my step budget.", success=False)
         if view.url in ("", "about:blank"):
             url = re.search(r"https?://\S+", task)
-            start = re.search(r"^Start URL[^:]*: (\S+)$", first, re.M).group(1)
+            start = _line(first, r"^Start URL[^:]*: (\S+)$")
             return self._call("navigate", url=url.group(0).rstrip(".,") if url else start)
 
         low = view.text.lower()
@@ -255,7 +287,7 @@ class ScriptedLLM:
 
     def _search(self, query: str, view: View, typed: set) -> LLMResponse:
         box = view.find("input(search)")
-        if box is None or query in typed and "results for" in view.text.lower():
+        if box is None or (query in typed and "results for" in view.text.lower()):
             return self._done(f"I couldn't search for '{query}' on this site.", success=False)
         return self._call("type_text", element_id=box, text=query, submit=True)
 
@@ -299,7 +331,7 @@ class ScriptedLLM:
     def _follow_link(self, label: str, view: View, history: list) -> LLMResponse:
         if history and history[-1]["name"] == "click" and label.lower() in view.last_result.lower():
             if not view.last_ok:
-                return self._done(f"I couldn't open that link: {view.last_result}", success=False)
+                return self._done(f"I couldn't open that link. {_blocked_reason(view)}", success=False)
             return self._done(f"Opened '{label}': {view.title.split(' · ')[0]} ({view.url}).")
         link = view.find(f'"{label.lower()}"')
         if link is not None:
@@ -308,7 +340,7 @@ class ScriptedLLM:
 
     def _newsletter(self, task: str, view: View, typed: set) -> LLMResponse:
         if not view.last_ok:
-            return self._done(f"I couldn't subscribe: {view.last_result}", success=False)
+            return self._done(f"I couldn't subscribe. {_blocked_reason(view)}", success=False)
         if "/partners" not in view.url:
             return self._click_or_fail(view, '"partners"')
         email = {k.lower(): v.strip() for k, v in FIELD_RE.findall(task)}.get("email", "")

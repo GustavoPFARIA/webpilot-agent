@@ -36,7 +36,8 @@ class SpyLLM:
     """Wraps any LLM and keeps every payload it was sent, to prove secrets never leave."""
 
     def __init__(self, inner) -> None:
-        self.inner, self.name, self.sent = inner, inner.name, []
+        self.inner, self.name = inner, inner.name
+        self.sent: list[str] = []
 
     def complete(self, system, messages, tools):
         self.sent.append(json.dumps(messages))

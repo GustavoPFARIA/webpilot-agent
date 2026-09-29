@@ -6,16 +6,14 @@ Thanks for helping! This project values safety guarantees and measurable behavio
 
 ```bash
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements-dev.txt
-playwright install chromium                          # or export BROWSER_CHANNEL=msedge / chrome
+make install                                         # deps + Chromium (or export BROWSER_CHANNEL=msedge / chrome)
+pre-commit install                                   # ruff, mypy and file checks on every commit
 ```
 
 ## Before opening a pull request
 
 ```bash
-ruff check . && ruff format --check .
-pytest -q
-python -m evals.run_evals --min-pass-rate 1.0
+make check    # ruff, mypy, pip-audit, pytest with coverage >= 85%, evals at 100%
 ```
 
 ## Guidelines
