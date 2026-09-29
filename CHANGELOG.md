@@ -7,7 +7,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [S
 ### Added
 - Engineering quality gates in CI: mypy, Ruff security rules (Bandit), pip-audit, coverage floor (85%), Python 3.12 + 3.13 matrix, CodeQL.
 - Docker smoke test: CI runs the image and completes a real browser task inside it (`scripts/smoke_test.py`).
-- Tests for the Claude and OpenAI adapters, for the full stack over HTTP with approval, and for unreachable sites (79 in total, 89% coverage).
+- Tests for the Claude and OpenAI adapters, the full stack over HTTP with approval, unreachable sites and sandbox hardening (88 in total, 89% coverage).
 - Pre-commit hooks, Makefile, UI example for the open-redirect attack, refreshed demo GIF.
 
 ### Fixed
@@ -18,7 +18,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [S
 - Clearer messages when a link, redirect or form is blocked.
 
 ### Security
-- Resolved all CodeQL findings in the test store: pages now render through Jinja2 with autoescaping (XSS), forged session cookies are rejected (cookie injection), and the deliberate open redirect only targets relative paths or the reserved `.example` TLD, so a deployed copy can't redirect real users.
+- Resolved all CodeQL findings in the test store: pages now render through Jinja2 with autoescaping (XSS), forged session cookies are never echoed back and the session id rotates on login (cookie injection, session fixation), and the deliberate open redirect only targets relative paths or the reserved `.example` TLD, so a deployed copy can't redirect real users.
 
 ## [1.1.0] - 2026-09-29
 

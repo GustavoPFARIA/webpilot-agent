@@ -187,16 +187,25 @@ def reset() -> None:
         v.clear()
 
 
-def _session(request: Request) -> tuple[str, Session]:
-    # Only accept ids this server could have issued; anything else gets a fresh one.
+def _new_session(session: Session | None = None) -> tuple[str, Session]:
+    sid = secrets.token_hex(16)
+    SESSIONS[sid] = session or Session()
+    return sid, SESSIONS[sid]
+
+
+def _session(request: Request) -> tuple[str | None, Session]:
+    """Return (cookie to set, session). Only ids this server issued are accepted,
+    and a client-supplied value is never echoed back in Set-Cookie: unknown or
+    malformed ids get a fresh server-generated one."""
     sid = request.cookies.get("acme_sid", "")
-    if not SID_RE.fullmatch(sid):
-        sid = secrets.token_hex(16)
-    return sid, SESSIONS.setdefault(sid, Session())
+    if SID_RE.fullmatch(sid) and sid in SESSIONS:
+        return None, SESSIONS[sid]
+    return _new_session()
 
 
-def _set_sid(resp: HTMLResponse | RedirectResponse, sid: str) -> None:
-    resp.set_cookie("acme_sid", sid, httponly=True, samesite="lax")
+def _set_sid(resp: HTMLResponse | RedirectResponse, new_sid: str | None) -> None:
+    if new_sid:
+        resp.set_cookie("acme_sid", new_sid, httponly=True, samesite="lax")
 
 
 def _render(request: Request, template: str, title: str, **ctx: Any) -> HTMLResponse:
@@ -284,8 +293,10 @@ def login(request: Request, email: str = Form(...), password: str = Form(...)):
     STATE["logins"].append({"email": email, "ok": ok})
     if not ok:
         return RedirectResponse("/sandbox/login?error=1", status_code=303)
-    sid, sess = _session(request)
-    sess.user = email
+    # Rotate the session id on login (prevents session fixation), keeping the cart.
+    _, old = _session(request)
+    SESSIONS.pop(request.cookies.get("acme_sid", ""), None)
+    sid, _ = _new_session(Session(cart=old.cart, user=email))
     resp = RedirectResponse("/sandbox/account", status_code=303)
     _set_sid(resp, sid)
     return resp

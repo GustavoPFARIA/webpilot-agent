@@ -153,3 +153,15 @@ def test_sandbox_rejects_forged_session_ids():
 def test_open_redirect_is_limited_to_reserved_domains(to, expected):
     r = local.get("/sandbox/go", params={"to": to}, follow_redirects=False)
     assert r.headers["location"] == expected
+
+
+def test_login_rotates_the_session_id():
+    sandbox.reset()
+    c = TestClient(app, client=("127.0.0.1", 50000))
+    c.get("/sandbox/")
+    before = c.cookies["acme_sid"]
+    s = get_settings().secrets
+    c.post("/sandbox/login", data={"email": s["store_username"], "password": s["store_password"]})
+    assert c.cookies["acme_sid"] != before
+    assert before not in sandbox.SESSIONS
+    assert "Loyalty points" in c.get("/sandbox/account").text
