@@ -7,3 +7,5 @@ services:
         required: false
     environment:
       PUBLIC_URL: http://127.0.0.1:8000
+      # Requests from outside the container are not loopback, so a token is required.
+      API_KEYS: ${API_KEYS:?Set API_KEYS in .env, e.g. API_KEYS={"a-long-random-token":"me"}}

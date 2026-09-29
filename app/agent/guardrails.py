@@ -2,7 +2,9 @@
 
 The model can be tricked; these checks run in code, after the model decides
 and before the browser acts, so a manipulated model still cannot:
-  - navigate outside the allow-list (blocks data exfiltration via URLs),
+  - load anything outside the allow-list, by typing a URL, clicking a link,
+    submitting a form or following a redirect (enforced on every network
+    request, so it also blocks data exfiltration and SSRF),
   - see or type raw credentials (secrets travel as {{secret:NAME}} placeholders),
   - pay, buy or delete anything without a human approving it.
 Prompt-injection text on pages is also detected and flagged to the model.
@@ -10,6 +12,7 @@ Maps to OWASP LLM Top 10 (2025): LLM01 prompt injection, LLM02 sensitive
 information disclosure, LLM06 excessive agency.
 """
 
+import ipaddress
 import re
 from urllib.parse import urlparse
 
@@ -45,15 +48,46 @@ def detect_injection(text: str) -> list[str]:
     return [label for label, pattern in INJECTION_PATTERNS.items() if re.search(pattern, low)]
 
 
-def check_url(url: str, allowed_domains: list[str]) -> str | None:
-    """Return an error message if the agent may not open this URL, else None."""
+def _normalize_host(host: str) -> str:
+    host = host.lower().rstrip(".")
+    try:
+        return host.encode("idna").decode("ascii")  # IDN lookalikes compare as punycode
+    except UnicodeError:
+        return host
+
+
+def check_url(url: str, allowed_domains: list[str], denied_paths: tuple[str, ...] | list[str] = ()) -> str | None:
+    """Return an error message if the browser may not load this URL, else None.
+
+    Fail-closed: only http(s), only allow-listed hosts (or their subdomains),
+    never private/link-local IPs unless listed exactly (SSRF, e.g. cloud metadata
+    at 169.254.169.254), and never the app's own internal endpoints."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         return f"Blocked: only http(s) URLs are allowed, got '{parsed.scheme or url}'."
-    host = (parsed.hostname or "").lower()
-    if any(host == d or host.endswith("." + d) for d in allowed_domains):
-        return None
-    return f"Blocked: '{host}' is not in the allowed domains ({', '.join(allowed_domains)})."
+    host = _normalize_host(parsed.hostname or "")
+    allowed = [_normalize_host(d) for d in allowed_domains]
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if (
+        ip is not None
+        and host not in allowed
+        and (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified)
+    ):
+        return f"Blocked: '{host}' is a private or internal network address."
+    if not any(host == d or host.endswith("." + d) for d in allowed):
+        return f"Blocked: '{host}' is not in the allowed domains ({', '.join(allowed_domains)})."
+    path = parsed.path or "/"
+    if any(path.startswith(p) for p in denied_paths):
+        return f"Blocked: '{path}' is an internal endpoint the agent may not access."
+    return None
+
+
+def url_policy(allowed_domains: list[str], denied_paths: list[str]):
+    """The URL check as a callable, for the browser's network guard."""
+    return lambda url: check_url(url, allowed_domains, denied_paths)
 
 
 def approval_reason(action: str, element: Element | None) -> str | None:

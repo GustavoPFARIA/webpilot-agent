@@ -3,6 +3,8 @@ guardrails hold even when the model does the wrong thing."""
 
 import json
 
+import pytest
+
 from app.agent.agent import Agent
 from app.browser.page_state import PageState
 from tests.conftest import SHOP, FakeBrowser, ListLLM, call
@@ -124,3 +126,36 @@ async def test_plain_text_reply_finishes(settings):
     result = await Agent(llm, FakeBrowser({}), settings).run("x")
     assert result.status == "done" and result.answer == "Nothing to do."
     assert result.usage["llm_calls"] == 1 and result.usage["input_tokens"] == 10
+
+
+async def test_clicked_link_off_the_allow_list_is_reported(settings):
+    from app.agent.guardrails import url_policy
+    from app.browser.page_state import Element
+
+    pages = {SHOP: PageState(url=SHOP, elements=[Element(id=1, tag="a", text="Deals", href="http://evil.example/")])}
+    browser = FakeBrowser(pages, policy=url_policy(settings.allowed_domains, []))
+    llm = ListLLM(
+        [[call("navigate", url=SHOP)], [call("click", element_id=1)], [call("done", answer="x", success=False)]]
+    )
+    result = await Agent(llm, browser, settings).run("open deals")
+    assert browser.url == SHOP
+    assert not result.steps[1].ok and "Blocked by network policy" in result.steps[1].outcome
+
+
+async def test_cost_is_tracked_and_budget_enforced(settings):
+    settings.max_cost_per_run_usd = 0.0001  # 10 in + 5 out tokens per call ~ $0.000105
+    llm = ListLLM([[call("scroll", direction="down")]])
+    result = await Agent(llm, FakeBrowser({SHOP: PageState(url=SHOP)}), settings).run("x")
+    assert result.status == "budget_exceeded"
+    assert result.usage["cost_usd"] == pytest.approx((10 * 3 + 5 * 15) / 1_000_000)
+
+
+async def test_model_api_failure_ends_the_run_cleanly(settings):
+    class Down:
+        name = "down"
+
+        def complete(self, *_):
+            raise ConnectionError("overloaded")
+
+    result = await Agent(Down(), FakeBrowser({}), settings).run("x")
+    assert result.status == "error" and "overloaded" in result.answer

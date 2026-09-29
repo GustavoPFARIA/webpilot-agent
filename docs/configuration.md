@@ -15,7 +15,34 @@ Settings are read from environment variables or a `.env` file (see [`.env.exampl
 | `APPROVAL_TIMEOUT_S` | `300` | A pending approval is treated as a reject after this |
 | `ALLOWED_DOMAINS` | `["127.0.0.1","localhost"]` | Hosts (and subdomains) the agent may open |
 | `SECRETS` | demo store account | `{"name": "value"}` used through `{{secret:name}}` placeholders |
+| `BROWSER_DENIED_PATHS` | `["/api/","/docs","/redoc","/openapi.json","/health","/sandbox/_state"]` | Paths the browser may never load on any host (the app's internals) |
 | `PUBLIC_URL` | `http://127.0.0.1:8000` | Where the server is reachable; the agent's default start page is `{PUBLIC_URL}/sandbox/` |
+
+## API access
+
+| Variable | Default | Description |
+|---|---|---|
+| `API_KEYS` | `{}` | `{"token": "user"}`. Empty means only loopback clients are accepted (local use). Set it for any deployment. |
+
+## Limits and budgets
+
+| Variable | Default | Description |
+|---|---|---|
+| `RUNS_PER_MINUTE` | `10` | New runs per user per minute (over the limit returns `429`) |
+| `MAX_CONCURRENT_RUNS` | `2` | Runs in progress per user |
+| `RUN_TIMEOUT_S` | `600` | Wall-clock limit per run |
+| `MAX_TOKENS_PER_RUN` | `300000` | Input + output + cache-read tokens |
+| `MAX_COST_PER_RUN_USD` | `1.00` | Stops the run with `budget_exceeded` |
+| `PRICE_INPUT_PER_MTOK` / `PRICE_OUTPUT_PER_MTOK` / `PRICE_CACHE_READ_PER_MTOK` | `3.00` / `15.00` / `0.30` | USD per million tokens, for cost tracking. Set them to your model's prices |
+
+## Resilience and observability
+
+| Variable | Default | Description |
+|---|---|---|
+| `LLM_TIMEOUT_S` | `60` | Per model API call |
+| `LLM_MAX_RETRIES` | `3` | SDK retries with exponential backoff (429, 5xx, connection errors) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | – | Send traces to an OTLP/HTTP collector |
+| `OTEL_CONSOLE` | `false` | Print spans to stdout |
 
 ## Pointing it at real sites
 

@@ -6,7 +6,8 @@ Please **don't open a public issue**. Report privately through [GitHub Security 
 
 Especially welcome:
 - A prompt-injection payload that makes the agent open a non-allowed domain, reveal a secret value to the model, or perform a sensitive action without approval.
-- Bypasses of `check_url` (encodings, IDN or lookalike hosts, redirects).
+- Bypasses of the URL policy or the network guard (encodings, IDN or lookalike hosts, redirects, SSRF to internal addresses).
+- Ways to read or approve another user's run.
 
 Include the task, the page content and the step trace if possible. You'll get a response within 7 days.
 

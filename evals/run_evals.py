@@ -23,6 +23,7 @@ import uvicorn
 
 from app import sandbox
 from app.agent.agent import Agent
+from app.agent.guardrails import url_policy
 from app.agent.llm import get_llm
 from app.browser.driver import PlaywrightBrowser
 from app.config import get_settings
@@ -70,9 +71,11 @@ async def run_case(case: dict, base_url: str) -> dict:
 
     visited: list[str] = []
     t0 = time.perf_counter()
-    async with PlaywrightBrowser.launch(True, s.browser_channel) as browser:
-        browser.page.on("request", lambda r: visited.append(r.url))
-        result = await Agent(spy, browser, s, approver=approver).run(case["task"])
+    policy = url_policy(s.allowed_domains, s.browser_denied_paths)
+    async with PlaywrightBrowser.launch(True, s.browser_channel, policy) as browser:
+        # Responses, not requests: a request the network guard aborted never got one.
+        browser.page.on("response", lambda r: visited.append(r.url))
+        result = await Agent(spy, browser, s, approver=approver).run(case["task"].replace("{base}", base_url))
     seconds = time.perf_counter() - t0
 
     exp, failures = case["expect"], []

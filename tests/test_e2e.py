@@ -28,7 +28,17 @@ async def _run(case_id: str, base_url: str) -> dict:
         raise
 
 
-@pytest.mark.parametrize("case_id", ["search-cheapest", "login-secrets", "reviews-with-injection", "buy-rejected"])
+@pytest.mark.parametrize(
+    "case_id",
+    [
+        "search-cheapest",
+        "login-secrets",
+        "reviews-with-injection",
+        "buy-rejected",
+        "open-redirect",
+        "form-exfiltration",
+    ],
+)
 async def test_e2e(case_id, base_url):
     result = await _run(case_id, base_url)
     assert result["passed"], result["failures"]

@@ -79,3 +79,32 @@ def test_secrets_round_trip():
     assert g.redact("echo hunter2-secret", secrets) == "echo {{secret:pw}}"
     with pytest.raises(KeyError):
         g.resolve_secrets("{{secret:missing}}", secrets)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://169.254.169.254/latest/meta-data/",  # cloud metadata (SSRF)
+        "http://10.0.0.5/admin",
+        "http://192.168.1.1/",
+        "http://[::1]:8000/",
+        "http://0.0.0.0:8000/",
+        "http://2130706433/",  # 127.0.0.1 written as a number
+        "http://127.0.0.1@evil.example/",  # userinfo trick: the host is evil.example
+    ],
+)
+def test_blocks_internal_addresses_and_tricks(url):
+    assert g.check_url(url, ALLOWED)
+
+
+def test_listed_loopback_is_allowed_but_internal_paths_are_not():
+    denied = ["/api/", "/sandbox/_state"]
+    assert g.check_url("http://127.0.0.1:8000/sandbox/", ALLOWED, denied) is None
+    assert "internal endpoint" in g.check_url("http://127.0.0.1:8000/api/runs", ALLOWED, denied)
+    assert "internal endpoint" in g.check_url("http://127.0.0.1:8000/sandbox/_state", ALLOWED, denied)
+
+
+def test_host_normalization():
+    assert g.check_url("https://EXAMPLE.com./a", ALLOWED) is None  # case and trailing dot
+    assert g.check_url("https://exämple.com/", ALLOWED)  # IDN lookalike compares as punycode
+    assert g.check_url("https://bücher.de/", ["bücher.de"]) is None

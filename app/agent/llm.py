@@ -39,10 +39,11 @@ class LLM(Protocol):
 
 
 class AnthropicLLM:
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, timeout: float = 60, max_retries: int = 3):
         import anthropic
 
-        self.client = anthropic.Anthropic(api_key=api_key)
+        # The SDK retries 408/409/429/5xx and connection errors with exponential backoff.
+        self.client = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=max_retries)
         self.model = model
         self.name = model
 
@@ -69,10 +70,10 @@ class OpenAILLM:
     """Translates the internal (Anthropic-style) messages to OpenAI and back, so
     tools, guardrails, evals and traces stay provider-agnostic."""
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, timeout: float = 60, max_retries: int = 3):
         import openai
 
-        self.client = openai.OpenAI(api_key=api_key)
+        self.client = openai.OpenAI(api_key=api_key, timeout=timeout, max_retries=max_retries)
         self.model = model
         self.name = model
 
@@ -216,6 +217,10 @@ class ScriptedLLM:
         low = view.text.lower()
         query = _query(task)
 
+        if "newsletter" in t:
+            return self._newsletter(task, view, typed)
+        if re.search(r"\b(click|open|follow)\b", t) and "link" in t:
+            return self._follow_link(query, view, history)
         if re.search(r"\b(log ?in|sign in|loyalty|my account)\b", t):
             return self._login(view, typed)
         if "contact" in t:
@@ -291,6 +296,26 @@ class ScriptedLLM:
             else self._click_or_fail(view, '"my account"')
         )
 
+    def _follow_link(self, label: str, view: View, history: list) -> LLMResponse:
+        if history and history[-1]["name"] == "click" and label.lower() in view.last_result.lower():
+            if not view.last_ok:
+                return self._done(f"I couldn't open that link: {view.last_result}", success=False)
+            return self._done(f"Opened '{label}': {view.title.split(' · ')[0]} ({view.url}).")
+        link = view.find(f'"{label.lower()}"')
+        if link is not None:
+            return self._call("click", element_id=link)
+        return self._click_or_fail(view, '"partners"')
+
+    def _newsletter(self, task: str, view: View, typed: set) -> LLMResponse:
+        if not view.last_ok:
+            return self._done(f"I couldn't subscribe: {view.last_result}", success=False)
+        if "/partners" not in view.url:
+            return self._click_or_fail(view, '"partners"')
+        email = {k.lower(): v.strip() for k, v in FIELD_RE.findall(task)}.get("email", "")
+        if email and email not in typed:
+            return self._call("type_text", element_id=view.find('label="email"'), text=email)
+        return self._click_or_fail(view, '"subscribe"')
+
     def _contact(self, task: str, view: View, typed: set) -> LLMResponse:
         if "we received your message" in view.text.lower():
             return self._done("Your message was sent through the contact form.")
@@ -331,9 +356,9 @@ def get_llm() -> LLM:
     if s.llm_provider == "anthropic":
         if not s.anthropic_api_key:
             raise RuntimeError("LLM_PROVIDER=anthropic requires ANTHROPIC_API_KEY")
-        return AnthropicLLM(s.anthropic_api_key, s.anthropic_model)
+        return AnthropicLLM(s.anthropic_api_key, s.anthropic_model, s.llm_timeout_s, s.llm_max_retries)
     if s.llm_provider == "openai":
         if not s.openai_api_key:
             raise RuntimeError("LLM_PROVIDER=openai requires OPENAI_API_KEY")
-        return OpenAILLM(s.openai_api_key, s.openai_model)
+        return OpenAILLM(s.openai_api_key, s.openai_model, s.llm_timeout_s, s.llm_max_retries)
     return ScriptedLLM()

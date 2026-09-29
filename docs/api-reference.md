@@ -2,6 +2,12 @@
 
 Base URL `http://127.0.0.1:8000`. OpenAPI docs are at `/docs`.
 
+## Authentication
+
+When `API_KEYS` is set, every `/api` route needs `Authorization: Bearer <token>`, and a missing or wrong token returns `401`. Without `API_KEYS`, only requests from the same machine (loopback) are accepted.
+
+Runs are private to the user who created them. Another user's run id returns `404`.
+
 ## `POST /api/runs`
 
 Starts a run in the background.
@@ -10,13 +16,13 @@ Starts a run in the background.
 {"task": "What is the price of the Aurora Headphones?"}
 ```
 
-`202 Accepted` returns `{"id": "3f9c0a1b2c4d", "status": "running"}`. `422` means the task is empty or longer than 500 characters.
+`202 Accepted` returns `{"id": "Xq3v9LmT0aBcDeFg", "status": "running"}`. `422` means the task is empty or longer than 500 characters. `429` (with `Retry-After`) means the user is over `RUNS_PER_MINUTE` or `MAX_CONCURRENT_RUNS`.
 
 ## `GET /api/runs/{id}`
 
 ```json
 {
-  "id": "3f9c0a1b2c4d",
+  "id": "Xq3v9LmT0aBcDeFg",
   "task": "Buy the Aurora Headphones.",
   "status": "awaiting_approval",
   "answer": "",
@@ -35,7 +41,7 @@ Starts a run in the background.
       "latency_ms": 212, "screenshot": "<base64 jpeg>"
     }
   ],
-  "usage": {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "llm_calls": 0},
+  "usage": {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "llm_calls": 0, "cost_usd": 0.0},
   "created_at": "2026-09-28T23:49:42+00:00"
 }
 ```
@@ -50,7 +56,8 @@ Starts a run in the background.
 | `failed` | The agent reported it couldn't complete the task |
 | `rejected` | A human rejected a sensitive action |
 | `max_steps` | Step budget exhausted |
-| `error` | Infrastructure error (for example, the browser couldn't start) |
+| `budget_exceeded` | Token or cost budget exhausted |
+| `error` | Model API failure after retries, timeout, or infrastructure error |
 
 ## `POST /api/runs/{id}/approval`
 
@@ -66,4 +73,4 @@ Returns the 50 most recent runs, newest first: `[{id, task, status, created_at}]
 
 ## `GET /health`
 
-`{"status": "ok", "llm_provider": "scripted", "allowed_domains": [...]}`
+`{"status": "ok", "llm_provider": "scripted", "allowed_domains": [...], "auth": "loopback_only"}`

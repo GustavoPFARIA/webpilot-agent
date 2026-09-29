@@ -23,13 +23,19 @@ This project focuses on the engineering around the model, the part that decides 
 
 | Problem | How WebPilot handles it |
 |---|---|
-| **Prompt injection.** A web page tells the agent to "ignore previous instructions". | Page text is fenced as untrusted, and injection patterns are detected and flagged. A domain **allow-list enforced in code** blocks the exfiltration step even if the model is fooled. |
+| **Prompt injection.** A web page tells the agent to "ignore previous instructions". | Page text is fenced as untrusted, and injection patterns are detected and flagged. The real guarantee is below: even a fooled model can't get data out. |
+| **Data exfiltration.** A link, a form, an open redirect or a script sends the browser to an attacker. | The domain **allow-list is enforced on every network request** the browser makes, not just on the URLs the model types. Redirects are checked before they are followed. |
+| **SSRF.** The agent is used to reach internal services. | Private, loopback and cloud-metadata IPs (`169.254.169.254`) are blocked unless explicitly listed, and so are the app's own API and internal endpoints. The agent can't approve its own actions. |
 | **Credential leaks.** The model sees or repeats passwords. | The model only ever writes `{{secret:NAME}}`, and the real value is filled in at the browser layer. Secret values echoed back by a page are **redacted before the model sees them**. |
 | **Excessive agency.** The agent buys or deletes things on its own. | Clicks on "Place order", "Pay" or "Delete" and typing into card fields **pause the run** until a human approves. |
-| **"It worked when I tried it."** | **11 end-to-end evals** run a real browser against a test store and grade what *actually happened* server-side. CI fails below 100%. |
+| **Access control.** Someone else reads your runs or approves your purchase. | Bearer-token auth, and runs are scoped to their owner. With no tokens configured, the API only answers this machine, so it's **secure by default**. |
+| **Runaway cost and abuse.** | Per-user rate and concurrency limits, plus step, token, **dollar** and wall-clock budgets per run. |
+| **Flaky model APIs.** | Timeouts and retries with exponential backoff on 429/5xx. A failed call ends the run cleanly with status `error`. |
+| **"What did the agent do, and what did it cost?"** | **OpenTelemetry** spans for every run, LLM call and action, using the GenAI conventions, plus cost in USD per run. |
+| **"It worked when I tried it."** | **16 end-to-end evals** run a real browser against a test store and grade what *actually happened* server-side. CI fails below 100%. |
 | **Token cost.** | Pages become a compact indexed text view (`[7] button "Add to cart"`) instead of raw HTML or screenshots, and the Claude adapter uses prompt caching. |
 
-These map directly to the OWASP Top 10 for LLM Applications (2025): LLM01 prompt injection, LLM02 sensitive information disclosure and LLM06 excessive agency. See [docs/security.md](docs/security.md).
+These controls map to the **OWASP Top 10 for LLM Applications (2025)** (LLM01, LLM02, LLM05, LLM06, LLM10) and to the **OWASP Top 10 (2025)** for the web API (A01 access control and SSRF, A02 misconfiguration, A07 authentication, A10 exceptional conditions). See [docs/security.md](docs/security.md).
 
 ## How it works
 
@@ -38,18 +44,18 @@ flowchart LR
     U[User task] --> A[Agent loop]
     A -->|"page state: URL, element ids, untrusted text"| M[LLM<br/>Claude / OpenAI / scripted]
     M -->|one tool call| G{Guardrails<br/>in code}
-    G -->|"off allow-list, literal password"| X[Blocked → error back to model]
+    G -->|"off allow-list, internal IP, literal password"| X[Blocked → error back to model]
     G -->|"pay / buy / delete"| H[Human approval]
     H -->|approve| B
     H -->|reject| S[Run stops]
-    G -->|safe| B[Playwright browser]
+    G -->|safe| B[Playwright browser<br/>network guard on every request]
     B -->|"new page state, secrets redacted, injection flagged"| A
     M -->|done| R[Answer + step trace]
 ```
 
 1. **Observe.** Playwright snapshots the page. Every visible interactive element gets a numeric id, and the page text is wrapped in `<<<PAGE … PAGE>>>` markers that the system prompt defines as untrusted.
 2. **Decide.** The model gets the task plus the page and calls **exactly one** tool: `navigate`, `click`, `type_text`, `select_option`, `scroll` or `done`.
-3. **Check.** The guardrails validate the action against the allow-list, the secret rules and the approval rules *before* anything happens.
+3. **Check.** The guardrails validate the action against the allow-list, the secret rules and the approval rules *before* anything happens. A second check runs **inside the browser's network layer** on every request and redirect, so a click can't bypass the first.
 4. **Act.** The browser executes the action. The new page state goes back to the model, and the loop repeats until `done` or the step budget runs out.
 
 Every step is recorded with the action, the outcome, the URL, the latency, security flags and a screenshot. Token usage is recorded per run.
@@ -70,11 +76,14 @@ uvicorn app.main:app --port 8000
 
 Open **http://127.0.0.1:8000**, pick an example and click **Run**.
 
-Or run it with Docker:
+Or run it with Docker. Requests into the container aren't loopback, so set a token first:
 
 ```bash
+echo 'API_KEYS={"a-long-random-token":"me"}' >> .env
 docker compose up --build
 ```
+
+Then paste the token in the UI when it asks.
 
 ### Demo mode vs. a real model
 
@@ -111,7 +120,7 @@ Current results are in [evals/results.md](evals/results.md). The secret-leak che
 ## Tests
 
 ```bash
-pytest -q        # 47 tests: guardrails, agent loop, API, real-browser end-to-end, MCP
+pytest -q        # 68 tests: guardrails, SSRF, auth, limits, agent loop, telemetry, real-browser end-to-end, MCP
 ruff check . && ruff format --check .
 ```
 
@@ -133,13 +142,13 @@ This exposes one tool, `run_browser_task(task)`. With no human in the loop, sens
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/runs` | Start a run `{"task": "..."}` → `202 {"id"}` |
+| `POST` | `/api/runs` | Start a run `{"task": "..."}` → `202 {"id"}`, or `429` over the limits |
 | `GET` | `/api/runs/{id}` | Status, steps (with screenshots), pending approval, answer, token usage |
 | `POST` | `/api/runs/{id}/approval` | `{"approve": true\|false}` for a paused run |
 | `GET` | `/api/runs` | Recent runs |
 | `GET` | `/health` | Provider and allow-list |
 
-Interactive docs are at `/docs`. Details are in [docs/api-reference.md](docs/api-reference.md).
+All `/api` routes need `Authorization: Bearer <token>` when `API_KEYS` is set; otherwise they only accept loopback clients. Interactive docs are at `/docs`. Details are in [docs/api-reference.md](docs/api-reference.md).
 
 ## Project structure
 
@@ -147,16 +156,17 @@ Interactive docs are at `/docs`. Details are in [docs/api-reference.md](docs/api
 app/
   agent/
     agent.py        # observe → decide → check → act loop, step trace, usage
-    guardrails.py   # allow-list, injection detection, secrets, approval rules
+    guardrails.py   # URL policy (allow-list, SSRF), injection detection, secrets, approval rules
     llm.py          # Claude (prompt caching) and OpenAI adapters + scripted policy
     tools.py        # tool schemas the model can call
     prompts.py      # system prompt
   browser/
-    driver.py       # Browser protocol + Playwright implementation
+    driver.py       # Browser protocol + Playwright, network guard on every request
     page_state.py   # DOM → compact [id] text view
   sandbox.py        # Acme Store: the test site (search, reviews, login, forms, checkout)
-  runs.py           # background runs that can pause for approval
-  main.py           # FastAPI app + web UI
+  runs.py           # background runs: owner scoping, rate/concurrency limits, timeout, approval
+  main.py           # FastAPI app, bearer auth, security headers, web UI
+  telemetry.py      # OpenTelemetry setup (OTLP or console)
   mcp_server.py     # MCP server
 evals/              # end-to-end eval dataset, runner and latest results
 tests/              # unit, API and real-browser tests
@@ -165,7 +175,7 @@ docs/               # architecture, security, evaluation, API, ADRs
 
 ## Tech stack
 
-**Python 3.12 · FastAPI · Playwright (Chromium) · Pydantic · Anthropic Claude (tool use, prompt caching) · OpenAI (function calling) · Model Context Protocol · pytest · Ruff · Docker · GitHub Actions**
+**Python 3.12 · FastAPI · Playwright (Chromium) · Pydantic · Anthropic Claude (tool use, prompt caching) · OpenAI (function calling) · Model Context Protocol · OpenTelemetry · pytest · Ruff · Docker · GitHub Actions**
 
 ## Documentation
 
@@ -173,6 +183,7 @@ docs/               # architecture, security, evaluation, API, ADRs
 - [Security](docs/security.md): threat model, OWASP LLM Top 10 mapping, known limits
 - [Evaluation](docs/evaluation.md): how cases are graded and how to add one
 - [Configuration](docs/configuration.md): every environment variable
+- [Observability](docs/observability.md): traces, cost and logs
 - [API reference](docs/api-reference.md)
 - [MCP](docs/mcp.md)
 - [Architecture decision records](docs/adr/)
@@ -180,7 +191,9 @@ docs/               # architecture, security, evaluation, API, ADRs
 ## Limitations and roadmap
 
 - Pattern-based injection *detection* is a signal, not a guarantee. The guarantees come from the allow-list, secret handling and approvals. A classifier model is on the roadmap.
-- One browser per run, in memory. Production would use a worker queue, persistent runs and a browser pool.
+- Runs live in memory in one process. Production would use a worker queue, a database for runs and a browser pool, with rate limits in Redis.
+- DNS rebinding (an allowed domain that resolves to an internal IP) isn't covered. Pinning DNS at the proxy level is the fix.
+- WebSocket traffic isn't routed through the network guard.
 - No vision yet. Canvas-heavy sites need screenshot input, and the step already captures one.
 - The scripted policy is a test double for the model, not a general agent.
 

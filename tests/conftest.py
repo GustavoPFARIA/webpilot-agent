@@ -10,10 +10,12 @@ from app.config import Settings
 class FakeBrowser:
     """In-memory browser: pages keyed by URL; clicking a link follows its href."""
 
-    def __init__(self, pages: dict[str, PageState]) -> None:
+    def __init__(self, pages: dict[str, PageState], policy=None) -> None:
         self.pages = pages
+        self.policy = policy  # simulates the network guard for clicked links
         self.url = "about:blank"
         self.actions: list[tuple] = []
+        self.blocked: list[str] = []
 
     async def goto(self, url: str) -> None:
         self.actions.append(("goto", url))
@@ -23,7 +25,11 @@ class FakeBrowser:
         self.actions.append(("click", element_id))
         el = (await self.state()).element(element_id)
         if el and el.href:
-            self.url = el.href
+            reason = self.policy(el.href) if self.policy else None
+            if reason:
+                self.blocked.append(f"{el.href} ({reason})")
+            else:
+                self.url = el.href
 
     async def type(self, element_id: int, text: str, submit: bool = False) -> None:
         self.actions.append(("type", element_id, text, submit))
@@ -40,6 +46,10 @@ class FakeBrowser:
 
     async def screenshot(self) -> bytes | None:
         return None
+
+    def drain_blocked(self) -> list[str]:
+        blocked, self.blocked = self.blocked, []
+        return blocked
 
 
 class ListLLM:

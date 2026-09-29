@@ -23,7 +23,8 @@ flowchart TB
 | `agent/llm.py` | One `LLM` protocol with three implementations. Messages are kept in one internal format (Anthropic content blocks), and the OpenAI adapter translates both ways. |
 | `browser/page_state.py` | Turns the DOM into the text view the model reads. |
 | `browser/driver.py` | `Browser` protocol plus the Playwright implementation. The agent never imports Playwright, so tests use an in-memory fake. |
-| `runs.py` | Starts runs as asyncio tasks and parks them on a `Future` while they wait for a human. |
+| `runs.py` | Starts runs as asyncio tasks, enforces per-user limits and ownership, and parks runs on a `Future` while they wait for a human. |
+| `telemetry.py` | OpenTelemetry setup. Spans are created in the agent loop. |
 | `sandbox.py` | Acme Store, the deterministic site used by the demo, tests and evals. |
 
 ## The agent loop
@@ -73,6 +74,10 @@ See [ADR 0001](adr/0001-indexed-text-page-state.md).
 3. `POST /approval` resolves the future and the loop continues. It times out as a **reject** after `APPROVAL_TIMEOUT_S`.
 
 The browser stays open on the same page while it waits, so nothing is lost.
+
+## Network guard
+
+`PlaywrightBrowser.launch(policy=...)` installs the URL policy as a route on the browser context, so every request is checked, not just the ones the model asks for. Redirects are fetched with `max_redirects=0`, and the `Location` is checked before the browser follows it. After a click or Enter, the driver waits for the network to go quiet, so a blocked navigation shows up in *that* step's outcome. If it landed on Chrome's error page, the driver steps back. See [ADR 0006](adr/0006-network-level-allow-list.md).
 
 ## Isolation
 
