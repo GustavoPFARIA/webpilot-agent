@@ -84,7 +84,10 @@ SHOP = "http://127.0.0.1/sandbox/"
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(_env_file=None, max_steps=6, secrets={"pw": "hunter2-secret"})
+    # Allow-list mode: these tests prove the strict guarantees (no exfiltration off the list).
+    return Settings(
+        _env_file=None, max_steps=6, secrets={"pw": "hunter2-secret"}, allowed_domains=["127.0.0.1", "localhost"]
+    )
 
 
 @pytest.fixture

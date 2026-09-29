@@ -32,9 +32,9 @@ A browser agent reads attacker-controlled content on every page and acts with th
 | **Budgets** | Per run: `MAX_STEPS`, `MAX_TOKENS_PER_RUN`, `MAX_COST_PER_RUN_USD` (status `budget_exceeded`) and `RUN_TIMEOUT_S`. |
 | **Model API failures** | SDK timeouts and retries with exponential backoff on 408/409/429/5xx. If the call still fails, the run ends with status `error` and a clear message, and it never hangs. |
 
-### Open-web mode (`ALLOWED_DOMAINS=["*", ...]`)
+### Open-web mode (the default: `ALLOWED_DOMAINS=["*", ...]`)
 
-An explicit opt-in to browse any public site. Still enforced: http(s) only; private, loopback, link-local and reserved IPs; internal names (`localhost`, `*.local`, `*.internal`, single-label hosts); disguised numeric IPs; this app's own internal paths; secret placeholders and redaction; human approval. **Given up:** the allow-list's guarantee against exfiltration to an attacker-controlled public site. It's a deliberate trade-off for flexibility, so keep the allow-list for anything that handles sensitive data. The security evals always run with the default allow-list, whatever the local `.env` says.
+The default, so the agent works on any public site. Still enforced: http(s) only; private, loopback, link-local and reserved IPs; internal names (`localhost`, `*.local`, `*.internal`, single-label hosts); disguised numeric IPs; this app's own internal paths; secret placeholders and redaction; human approval. **Given up:** the allow-list's guarantee against exfiltration to an attacker-controlled public site. It's a deliberate trade-off for flexibility, so keep the allow-list for anything that handles sensitive data. The security evals always run with the default allow-list, whatever the local `.env` says.
 
 ### Browser network guard (`app/browser/driver.py`)
 

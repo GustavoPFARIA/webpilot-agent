@@ -19,7 +19,7 @@ LOOPBACK = {"127.0.0.1", "::1"}
 
 app = FastAPI(
     title="WebPilot Agent",
-    version="1.4.0",
+    version="1.5.0",
     description="AI agent that completes tasks in a real browser, with guardrails and human approval.",
 )
 app.include_router(sandbox.router)

@@ -33,7 +33,10 @@ class Settings(BaseSettings):
     approval_timeout_s: float = 300
 
     # Security policy: the agent may only open these hosts (and their subdomains).
-    allowed_domains: list[str] = ["127.0.0.1", "localhost"]
+    # Default: any public website ("*"), while private networks, cloud metadata,
+    # disguised IPs and this app's own API stay blocked. For the strongest
+    # protection against exfiltration, replace "*" with the exact sites allowed.
+    allowed_domains: list[str] = ["*", "127.0.0.1", "localhost"]
     # Credentials the agent can use via {{secret:NAME}} placeholders. The model
     # only ever sees the placeholder. Defaults are the demo store's fake account.
     secrets: dict[str, str] = {"store_username": "demo@acme.test", "store_password": "demo-pass-8431"}

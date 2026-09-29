@@ -2,6 +2,11 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [Semantic Versioning](https://semver.org).
 
+## [1.5.0] - 2026-09-29
+
+### Changed
+- **Any public website works out of the box** (`ALLOWED_DOMAINS` defaults to `["*","127.0.0.1","localhost"]`). Private networks, cloud metadata, disguised IPs and this app's API stay blocked. The strict allow-list is one line of configuration away, and the security evals always run in that mode.
+
 ## [1.4.0] - 2026-09-29
 
 ### Added
