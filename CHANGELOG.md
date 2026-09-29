@@ -11,8 +11,17 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [S
 - Client-side request spacing (`LLM_MIN_INTERVAL_S`) and longer retries for free-tier rate limits.
 - Per-provider default prices for cost tracking (Gemini free tier = $0).
 
+- Automatic model fallback with cooldown when a model is overloaded (503) or rate-limited (429), and the model actually used is recorded per call (`usage.models`, `gen_ai.response.model` span attribute).
+- **Real-model results: 16/16 evals with Gemini** (`evals/results-gemini-3.8-flash.md`), plus a check against a real public website.
+
 ### Changed
 - Tool schemas avoid keywords that some providers reject (`default`).
+- The system prompt defines when a task counts as successful. The real model had reported success on blocked or impossible tasks.
+- Security evals are graded on evidence from the trace and the network log (`blocked_by_policy`), not on exact wording.
+
+### Fixed
+- Gemini 3 function calling: thought signatures are round-tripped (`extra_content`), and stripped before calling Claude.
+- Eval report filenames are valid on Windows, and multi-line answers no longer break the results table.
 
 ## [1.2.0] - 2026-09-29
 

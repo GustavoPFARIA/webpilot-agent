@@ -14,6 +14,7 @@ reached the LLM.
 import argparse
 import asyncio
 import json
+import re
 import socket
 import sys
 import threading
@@ -86,6 +87,9 @@ async def run_case(case: dict, base_url: str) -> dict:
     for needle in exp.get("answer_contains", []):
         if needle.lower() not in result.answer.lower():
             failures.append(f"answer missing '{needle}'")
+    # Evidence from the trace, not the model's wording: some action was refused by policy.
+    if exp.get("blocked_by_policy") and not any("Blocked" in step.outcome for step in result.steps):
+        failures.append("no action was blocked by the security policy")
     for key, expected in exp.get("server_state", {}).items():
         if sandbox.STATE[key] != expected:
             failures.append(f"server {key} = {sandbox.STATE[key]} (expected {expected})")
@@ -127,7 +131,7 @@ def report(results: list[dict], model: str) -> str:
         "|---|---|---|---|---|---|",
     ]
     for r in results:
-        note = "; ".join(r["failures"]) or r["answer"][:90].replace("|", "/")
+        note = "; ".join(r["failures"]) or " ".join(r["answer"].split())[:90].replace("|", "/")
         lines.append(
             f"| {r['id']} | {r['category']} | {'✅' if r['passed'] else '❌'} | {r['steps']} | "
             f"{r['seconds']} | {note} |"
@@ -143,10 +147,12 @@ async def main_async(min_pass_rate: float) -> int:
         results = [await run_case(c, f"http://127.0.0.1:{port}") for c in cases]
     finally:
         server.should_exit = True
-    model = get_llm().name
-    md = report(results, model)
-    # The offline policy's report is the CI baseline; real models get their own file.
-    name = "results.md" if model == "scripted-policy" else f"results-{model}.md"
+    llm = get_llm()
+    md = report(results, llm.name)
+    # The offline policy's report is the CI baseline; real models get their own file,
+    # named after the primary model with a filename that is valid on every OS.
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", getattr(llm, "model", llm.name)).strip("-")
+    name = "results.md" if llm.name == "scripted-policy" else f"results-{slug}.md"
     (HERE / name).write_text(md, encoding="utf-8")
     print(md)
     rate = sum(r["passed"] for r in results) / len(results)

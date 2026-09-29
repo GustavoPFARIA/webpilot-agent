@@ -57,21 +57,22 @@ def _openai(response):
     llm.client = NS(chat=NS(completions=NS(create=lambda **_: response)))
     llm.model = llm.name = "gpt-x"
     llm.min_interval_s = 0.0
+    llm.fallback_models, llm.cooldown_s, llm._cooldown_until = [], 120.0, {}
     return llm
 
 
 def test_openai_parses_function_calls_and_ignores_custom_ones():
     calls = [
-        NS(type="function", id="c1", function=NS(name="click", arguments='{"element_id": 3}')),
+        NS(type="function", id="c1", function=NS(name="click", arguments='{"element_id": 3}'), model_extra={}),
         NS(type="custom", id="c2", custom=NS(name="x", input="free text")),
     ]
     resp = _openai(_openai_response(calls)).complete(["s"], MESSAGES, TOOLS)
     assert resp.tool_calls == [{"type": "tool_use", "id": "c1", "name": "click", "input": {"element_id": 3}}]
-    assert resp.usage == {"input_tokens": 50, "output_tokens": 7, "cache_read_input_tokens": 40}
+    assert resp.usage == {"input_tokens": 50, "output_tokens": 7, "cache_read_input_tokens": 40, "model": "gpt-x"}
 
 
 def test_openai_survives_missing_usage_and_malformed_arguments():
-    calls = [NS(type="function", id="c1", function=NS(name="click", arguments='{"element_id": '))]
+    calls = [NS(type="function", id="c1", function=NS(name="click", arguments='{"element_id": '), model_extra={})]
     resp = _openai(_openai_response(calls, usage=False)).complete(["s"], MESSAGES, TOOLS)
     assert resp.tool_calls[0]["input"] == {}
     assert resp.usage["input_tokens"] == 0
@@ -133,7 +134,8 @@ def test_gemini_uses_the_openai_compatible_endpoint_with_throttling(monkeypatch)
     llm = get_llm()
     assert isinstance(llm, OpenAILLM)
     assert str(llm.client.base_url) == GEMINI_BASE_URL
-    assert llm.min_interval_s == 6.5 and llm.client.max_retries >= 6
+    assert llm.min_interval_s == 6.5
+    assert llm.fallback_models == s.gemini_fallback_models  # overloaded free models fall back to lighter ones
 
 
 def test_throttle_spaces_out_calls(monkeypatch):
@@ -148,3 +150,77 @@ def test_throttle_spaces_out_calls(monkeypatch):
     llm._throttle()  # first call: no wait
     llm._throttle()  # 1 s later: waits the remaining 5.5 s
     assert sleeps == [5.5]
+
+
+def _status_error(cls, code):
+    import httpx
+
+    req = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    return cls("overloaded", response=httpx.Response(code, request=req), body=None)
+
+
+def test_falls_back_when_the_primary_model_is_overloaded():
+    import openai
+
+    tried = []
+
+    def create(model, **_):
+        tried.append(model)
+        if model == "big":
+            raise _status_error(openai.InternalServerError, 503)
+        return _openai_response(
+            [NS(type="function", id="c1", function=NS(name="scroll", arguments="{}"), model_extra={})]
+        )
+
+    llm = _openai(None)
+    llm.client = NS(chat=NS(completions=NS(create=create)))
+    llm.model, llm.fallback_models, llm.cooldown_s, llm._cooldown_until = "big", ["lite"], 120.0, {}
+
+    first = llm.complete(["s"], MESSAGES, TOOLS)
+    assert tried == ["big", "lite"] and first.usage["model"] == "lite"
+    llm.complete(["s"], MESSAGES, TOOLS)  # the overloaded model is skipped while cooling down
+    assert tried == ["big", "lite", "lite"]
+
+
+def test_errors_surface_when_every_model_fails():
+    import openai
+
+    def create(model, **_):
+        raise _status_error(openai.RateLimitError, 429)
+
+    llm = _openai(None)
+    llm.client = NS(chat=NS(completions=NS(create=create)))
+    llm.model, llm.fallback_models, llm.cooldown_s, llm._cooldown_until = "a", ["b"], 120.0, {}
+    with pytest.raises(openai.RateLimitError):
+        llm.complete(["s"], MESSAGES, TOOLS)
+
+
+def test_bad_request_does_not_trigger_fallback():
+    import openai
+
+    tried = []
+
+    def create(model, **_):
+        tried.append(model)
+        raise _status_error(openai.BadRequestError, 400)
+
+    llm = _openai(None)
+    llm.client = NS(chat=NS(completions=NS(create=create)))
+    llm.model, llm.fallback_models, llm.cooldown_s, llm._cooldown_until = "a", ["b"], 120.0, {}
+    with pytest.raises(openai.BadRequestError):
+        llm.complete(["s"], MESSAGES, TOOLS)
+    assert tried == ["a"]  # a bad request is our bug, not an outage: don't hide it
+
+
+def test_gemini_thought_signatures_round_trip_and_never_reach_claude():
+    from app.agent.llm import _strip_provider_extra
+
+    sig = {"google": {"thought_signature": "abc"}}
+    call = NS(type="function", id="c1", function=NS(name="scroll", arguments="{}"), model_extra={"extra_content": sig})
+    resp = _openai(_openai_response([call])).complete(["s"], MESSAGES, TOOLS)
+    assert resp.tool_calls[0]["provider_extra"] == sig
+
+    history = [*MESSAGES, {"role": "assistant", "content": resp.content}]
+    out, _ = OpenAILLM.to_openai(["s"], history, TOOLS)
+    assert out[-1]["tool_calls"][0]["extra_content"] == sig  # sent back to Gemini
+    assert "provider_extra" not in _strip_provider_extra(history)[-1]["content"][0]  # but not to Claude

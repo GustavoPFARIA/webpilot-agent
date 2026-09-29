@@ -16,6 +16,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
+from typing import Any
 
 from app.agent import guardrails
 from app.agent.llm import LLM
@@ -79,7 +80,7 @@ class Agent:
         self.approver = approver
         self.on_step = on_step or (lambda _: None)
         self.screenshots = screenshots
-        self.usage = {
+        self.usage: dict[str, Any] = {
             "input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "llm_calls": 0, "cost_usd": 0.0,
         }  # fmt: skip
 
@@ -236,11 +237,16 @@ class Agent:
             resp = await asyncio.to_thread(self.llm.complete, [SYSTEM_PROMPT], messages, TOOLS)
             span.set_attribute("gen_ai.usage.input_tokens", int(resp.usage.get("input_tokens", 0) or 0))
             span.set_attribute("gen_ai.usage.output_tokens", int(resp.usage.get("output_tokens", 0) or 0))
+            if resp.usage.get("model"):
+                span.set_attribute("gen_ai.response.model", resp.usage["model"])
         self._add_usage(resp.usage)
         return resp
 
     def _add_usage(self, usage: dict) -> None:
         self.usage["llm_calls"] += 1
+        if usage.get("model"):
+            self.usage.setdefault("models", {})
+            self.usage["models"][usage["model"]] = self.usage["models"].get(usage["model"], 0) + 1
         for k in ("input_tokens", "output_tokens", "cache_read_input_tokens"):
             self.usage[k] += int(usage.get(k, 0) or 0)
         u = self.usage

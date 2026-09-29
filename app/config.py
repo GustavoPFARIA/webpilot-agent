@@ -15,9 +15,12 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4.1-mini"
     # Any OpenAI-compatible server: Groq, OpenRouter, Ollama (http://localhost:11434/v1), vLLM...
     openai_base_url: str | None = None
+    openai_fallback_models: list[str] = []
     # Google Gemini has a free tier (no card): https://aistudio.google.com/apikey
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.8-flash"
+    # Tried in order when the main model is overloaded (503) or rate-limited (429).
+    gemini_fallback_models: list[str] = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
     # Minimum seconds between model calls, to stay under free-tier rate limits.
     # Unset = provider default (Gemini free tier: 6.5 s, others: none).
     llm_min_interval_s: float | None = None
