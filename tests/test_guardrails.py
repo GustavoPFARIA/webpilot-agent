@@ -147,3 +147,8 @@ def test_internal_paths_only_apply_to_this_apps_own_hosts():
     assert g.check_url("https://status.example.com/api/v2/status.json", OPEN_WEB, denied) is None
     assert g.check_url("http://localhost:8000/api/runs", OPEN_WEB, denied)
     assert g.check_url("https://webpilot.example.com/api/runs", ["*"], denied, ["webpilot.example.com"])
+
+
+@pytest.mark.parametrize("url", ["http://evil.example/collect", "https://x.invalid/", "http://attacker.test/"])
+def test_reserved_tlds_are_blocked_even_in_open_web_mode(url):
+    assert "reserved" in g.check_url(url, OPEN_WEB)

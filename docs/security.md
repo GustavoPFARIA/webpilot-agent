@@ -20,8 +20,8 @@ A browser agent reads attacker-controlled content on every page and acts with th
 
 | Control | Guarantee |
 |---|---|
-| **URL policy** (`check_url`) | Only `http(s)`. The host must be in the allow-list (or be a subdomain), compared after lowercasing, stripping the trailing dot and IDN/punycode normalization. `javascript:`, `file:` and `data:` are blocked, and so are lookalikes (`example.com.evil.io`, `notexample.com`, `exämple.com`) and userinfo tricks (`http://127.0.0.1@evil.example`). |
-| **SSRF protection** | Private, loopback, link-local (cloud metadata `169.254.169.254`), reserved and unspecified IPs are blocked unless listed exactly. Numeric host forms like `http://2130706433/` never match the allow-list. `BROWSER_DENIED_PATHS` blocks the app's own `/api/`, `/docs`, `/openapi.json`, `/health` and `/sandbox/_state` even on an allowed host, so the agent can't read other runs or approve itself. |
+| **URL policy** (`check_url`) | Only `http(s)`. With the default `"*"`, any public host; in allow-list mode, the host must be listed (or be a subdomain), compared after lowercasing, stripping the trailing dot and IDN/punycode normalization. `javascript:`, `file:` and `data:` are blocked, and so are lookalikes (`example.com.evil.io`, `notexample.com`, `exämple.com`) and userinfo tricks (`http://127.0.0.1@evil.example`). |
+| **SSRF protection** (both modes) | Private, loopback, link-local (cloud metadata `169.254.169.254`), reserved and unspecified IPs are blocked unless listed exactly, and so are internal names (`localhost`, `*.local`, `*.internal`, single-label hosts) disguised numeric hosts (`http://2130706433/`, `0x7f000001`) and reserved special-use domains (`*.example`, `*.test`, `*.invalid`, RFC 2606/6761), which never exist on the public internet. `BROWSER_DENIED_PATHS` blocks this app's own `/api/`, `/docs`, `/openapi.json`, `/health` and `/sandbox/_state` on its own hosts, so the agent can't read other runs or approve itself. |
 | **Secret placeholders** | The model writes `{{secret:store_password}}`, and the value is substituted at the browser layer after the model call. |
 | **Redaction** | Any secret value anywhere in the page view (text *or* element descriptions) is replaced by its placeholder before the model sees it. |
 | **Literal password block** | Typing anything other than a placeholder into a `type=password` field is refused. |
@@ -61,7 +61,7 @@ This closed a real gap in v1.0.0, where the allow-list was checked only for `nav
 
 | Risk | Status |
 |---|---|
-| LLM01 Prompt injection | Mitigated: fencing, detection, network allow-list, approvals |
+| LLM01 Prompt injection | Mitigated: fencing, detection, network guard (SSRF always; exfiltration in allow-list mode), approvals |
 | LLM02 Sensitive information disclosure | Mitigated: placeholders and redaction, spy-checked in evals |
 | LLM05 Improper output handling | Mitigated: tool arguments validated, UI escapes output, CSP |
 | LLM06 Excessive agency | Mitigated: small tool set, allow-list, human approval, budgets |

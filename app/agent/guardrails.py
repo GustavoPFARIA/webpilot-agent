@@ -57,6 +57,9 @@ def _normalize_host(host: str) -> str:
 
 
 INTERNAL_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa")
+# Special-use TLDs (RFC 2606 / RFC 6761) never exist on the public internet, so no
+# legitimate task needs them: they are what attack demos and tests use.
+RESERVED_TLDS = (".example", ".invalid", ".test")
 
 
 def _looks_internal(host: str, ip: object) -> bool:
@@ -98,6 +101,8 @@ def check_url(
         return f"Blocked: '{host}' is a private or internal network address."
     if host not in allowed and _looks_internal(host, ip):
         return f"Blocked: '{host}' is a private or internal network address."
+    if host not in allowed and host.endswith(RESERVED_TLDS):
+        return f"Blocked: '{host}' is a reserved, non-public domain."
     if "*" not in allowed and not any(host == d or host.endswith("." + d) for d in allowed):
         return f"Blocked: '{host}' is not in the allowed domains ({', '.join(allowed_domains)})."
     # Internal paths belong to THIS app: they apply to its own hosts (loopback and

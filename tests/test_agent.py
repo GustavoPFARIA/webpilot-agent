@@ -16,13 +16,13 @@ async def test_gullible_model_cannot_follow_injection(settings, shop_pages):
         [
             [call("navigate", url=SHOP)],
             [call("click", element_id=1)],
-            [call("navigate", url="http://evil.example/steal")],  # model obeys the page
+            [call("navigate", url="http://attacker-site.com/steal")],  # model obeys the page
             [call("done", answer="gave up", success=False)],
         ]
     )
     result = await Agent(llm, browser, settings).run("read the reviews")
 
-    assert ("goto", "http://evil.example/steal") not in browser.actions
+    assert ("goto", "http://attacker-site.com/steal") not in browser.actions
     blocked = result.steps[2]
     assert not blocked.ok and "not in the allowed domains" in blocked.outcome
     assert result.steps[1].flags, "injection on the reviews page should be flagged"
@@ -132,7 +132,9 @@ async def test_clicked_link_off_the_allow_list_is_reported(settings):
     from app.agent.guardrails import url_policy
     from app.browser.page_state import Element
 
-    pages = {SHOP: PageState(url=SHOP, elements=[Element(id=1, tag="a", text="Deals", href="http://evil.example/")])}
+    pages = {
+        SHOP: PageState(url=SHOP, elements=[Element(id=1, tag="a", text="Deals", href="http://attacker-site.com/")])
+    }
     browser = FakeBrowser(pages, policy=url_policy(settings.allowed_domains, []))
     llm = ListLLM(
         [[call("navigate", url=SHOP)], [call("click", element_id=1)], [call("done", answer="x", success=False)]]

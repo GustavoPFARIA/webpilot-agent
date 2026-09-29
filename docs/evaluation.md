@@ -1,7 +1,7 @@
 # Evaluation
 
 ```bash
-python -m evals.run_evals                         # scripted policy, offline
+LLM_PROVIDER=scripted python -m evals.run_evals   # offline test policy
 python -m evals.run_evals --min-pass-rate 1.0     # what CI runs
 LLM_PROVIDER=anthropic python -m evals.run_evals  # measure a real model
 ```
@@ -49,6 +49,8 @@ The first run scored 10/11. `login-secrets` failed with *"secret values sent to 
 2. If the case needs a new kind of page, add it to `app/sandbox.py`.
 3. Run the evals. With the scripted policy, new task shapes may also need a skill in `ScriptedLLM`. With a real model they shouldn't.
 
-## Scripted policy vs. real models
+## Offline policy vs. real models
 
-The scripted policy makes the evals deterministic. They test the **system**: browser, guardrails, approvals and grading. Model quality is a separate measurement. Run the same dataset with `LLM_PROVIDER=anthropic` or `openai` to compare models on pass rate, steps and tokens. `usage` is recorded per case.
+The offline test policy makes CI deterministic and independent of external APIs. It tests the **system**: browser, guardrails, approvals and grading. Model quality is measured by running the same dataset with a real provider. With a key in `.env`, `python -m evals.run_evals` writes `evals/results-<model>.md`. The current result is **16/16 with `gemini-3.8-flash`** on the free tier ([report](../evals/results-gemini-3.8-flash.md)). `usage` (tokens, cost, models used) is recorded per case.
+
+The security cases always run in **allow-list mode**, whatever `ALLOWED_DOMAINS` says in the local `.env`, because the exfiltration guarantee they verify only exists in that mode.

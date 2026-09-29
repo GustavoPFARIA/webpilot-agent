@@ -2,6 +2,14 @@
 
 All notable changes follow [Keep a Changelog](https://keepachangelog.com) and [Semantic Versioning](https://semver.org).
 
+## [1.5.1] - 2026-09-29
+
+### Fixed
+- In the new default (any website), links to reserved attacker domains such as `evil.example` were no longer blocked by policy, only failing because the domain doesn't resolve. Reserved special-use TLDs (`.example`, `.test`, `.invalid`) are now always blocked, so the UI's attack examples are truthful in every mode.
+
+### Changed
+- README restructured to the standard open-source layout (table of contents, features, getting started, usage with real-site examples, security model, evaluation, contributing). Docs updated for the any-website default, and ADR 0008 records the decision.
+
 ## [1.5.0] - 2026-09-29
 
 ### Changed

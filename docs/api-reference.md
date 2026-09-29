@@ -73,4 +73,6 @@ Returns the 50 most recent runs, newest first: `[{id, task, status, created_at}]
 
 ## `GET /health`
 
-`{"status": "ok", "llm_provider": "scripted", "allowed_domains": [...], "auth": "loopback_only"}`
+`{"status": "ok", "llm_provider": "gemini", "allowed_domains": ["*", "127.0.0.1", "localhost"], "auth": "loopback_only"}`
+
+`llm_provider` is `scripted` when no model key is configured. `"*"` in `allowed_domains` means any public website.

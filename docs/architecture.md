@@ -9,11 +9,11 @@ flowchart TB
     API --> RM[RunManager<br/>runs.py]
     RM -->|one per run| AG[Agent<br/>agent/agent.py]
     MCP --> AG
-    AG --> LLM[LLM adapter<br/>Claude · OpenAI · scripted]
+    AG --> LLM[LLM adapter<br/>Gemini · Claude · OpenAI · offline test policy]
     AG --> GR[Guardrails<br/>agent/guardrails.py]
     AG --> BR[Browser protocol<br/>browser/driver.py]
     BR --> PW[Playwright Chromium<br/>fresh context per run]
-    PW -->|HTTP| SITE[Allowed sites<br/>e.g. Acme sandbox]
+    PW -->|HTTP, checked per request| SITE[Public websites<br/>or an allow-list · Acme test store]
 ```
 
 | Module | Responsibility |
