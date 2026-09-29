@@ -75,7 +75,16 @@ Every step is recorded with the action, the outcome, the URL, the latency, secur
 - Chromium, installed by the command below (or an existing Microsoft Edge / Chrome via `BROWSER_CHANNEL=msedge`)
 - Optional: a model API key. [Google Gemini's is free, with no card required](https://aistudio.google.com/apikey).
 
-### Installation
+### One command
+
+Clone the repository, then:
+
+- **Windows:** double-click `start.bat`
+- **macOS / Linux:** `./start.sh`
+
+The first run creates the environment, installs everything and the browser, and falls back to Edge or Chrome if the Chromium download fails. Every run opens **http://localhost:8000**. For any task on any website, paste a free Gemini key into `.env` ([how](#connect-a-model)).
+
+### Installation (manual)
 
 ```bash
 git clone https://github.com/GustavoPFARIA/webpilot-agent.git
