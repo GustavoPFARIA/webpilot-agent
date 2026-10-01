@@ -4,7 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # env_ignore_empty: a blank line like `PRICE_INPUT_PER_MTOK=` (as in .env.example) means "use the default".
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     # LLM provider: "auto" picks the first configured key (Anthropic, OpenAI,
     # Gemini). "scripted" is a deterministic offline policy for tests and CI only.
